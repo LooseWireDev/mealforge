@@ -103,7 +103,7 @@ function generateApiFeature(tree: Tree, root: string, name: string): void {
 
   tree.write(
     joinPathFragments(dir, 'router.ts'),
-    `import { router, publicProcedure } from '../../trpc';
+    `import { router, publicProcedure } from '../../trpcInit';
 import { z } from 'zod';
 
 export const ${name}Router = router({

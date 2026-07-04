@@ -9,5 +9,8 @@
     "./schemas": "./src/schemas/index.ts",
     "./types": "./src/types/trpc.ts",
     "./utils": "./src/utils/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   }
 }
