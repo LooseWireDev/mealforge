@@ -10,6 +10,11 @@ export interface AggregatedItem {
 }
 
 // Canonical factors: volume in ml, weight in g.
+const ML_PER_TSP = 4.92892;
+const ML_PER_TBSP = 14.7868;
+const ML_PER_CUP = 236.588;
+const G_PER_OZ = 28.3495;
+
 const VOLUME_ML: Record<string, number> = {
   tsp: 4.92892,
   teaspoon: 4.92892,
@@ -40,7 +45,18 @@ const WEIGHT_G: Record<string, number> = {
   pound: 453.592,
 };
 
-const METRIC_UNITS = new Set(['ml', 'milliliter', 'millilitre', 'l', 'liter', 'litre', 'g', 'gram', 'kg', 'kilogram']);
+const METRIC_UNITS = new Set([
+  'ml',
+  'milliliter',
+  'millilitre',
+  'l',
+  'liter',
+  'litre',
+  'g',
+  'gram',
+  'kg',
+  'kilogram',
+]);
 
 function normalizeUnit(unit: string): string {
   let u = unit.trim().toLowerCase().replace(/\.$/, '');
@@ -71,8 +87,7 @@ function unitFamily(unit: string | null): UnitFamily {
 
 export function normalizedKey(name: string, unit: string | null): string {
   const family = unitFamily(unit);
-  const familyKey =
-    family.kind === 'count' ? `count:${family.unit}` : family.kind;
+  const familyKey = family.kind === 'count' ? `count:${family.unit}` : family.kind;
   return `${normalizeName(name).toLowerCase()}|${familyKey}`;
 }
 
@@ -105,11 +120,11 @@ function formatVolume(totalMl: number, metric: boolean): string {
     if (totalMl >= 1000) return `${formatNumber(totalMl / 1000)} l`;
     return `${Math.round(totalMl)} ml`;
   }
-  const cups = totalMl / VOLUME_ML['cup']!;
+  const cups = totalMl / ML_PER_CUP;
   if (cups >= 1) return `${formatNumber(cups)} ${formatNumber(cups) === '1' ? 'cup' : 'cups'}`;
-  const tbsp = totalMl / VOLUME_ML['tbsp']!;
+  const tbsp = totalMl / ML_PER_TBSP;
   if (tbsp >= 1) return `${formatNumber(tbsp)} tbsp`;
-  return `${formatNumber(totalMl / VOLUME_ML['tsp']!)} tsp`;
+  return `${formatNumber(totalMl / ML_PER_TSP)} tsp`;
 }
 
 function formatWeight(totalG: number, metric: boolean): string {
@@ -117,7 +132,7 @@ function formatWeight(totalG: number, metric: boolean): string {
     if (totalG >= 1000) return `${formatNumber(totalG / 1000)} kg`;
     return `${Math.round(totalG)} g`;
   }
-  const oz = totalG / WEIGHT_G['oz']!;
+  const oz = totalG / G_PER_OZ;
   if (oz >= 16) return `${formatNumber(oz / 16)} lb`;
   return `${formatNumber(oz)} oz`;
 }
@@ -157,9 +172,7 @@ export function aggregateIngredients(ingredients: IngredientInput[]): Aggregated
     if (ingredient.quantity !== null) {
       bucket.hasQuantity = true;
       bucket.total +=
-        family.kind === 'count'
-          ? ingredient.quantity
-          : ingredient.quantity * family.toCanonical;
+        family.kind === 'count' ? ingredient.quantity : ingredient.quantity * family.toCanonical;
     }
   }
 

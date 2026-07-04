@@ -1,7 +1,6 @@
-import { createFileRoute } from '@tanstack/react-router';
-
 import { DAY_NAMES } from '@mealforge/shared/schemas';
 import { weekStartOf } from '@mealforge/shared/utils';
+import { createFileRoute } from '@tanstack/react-router';
 
 import { EmptyState } from '../components/EmptyState';
 import { RecipeCard } from '../features/recipes/RecipeCard';
@@ -15,7 +14,8 @@ function weekRangeLabel(weekStart: string): string {
   const start = new Date(`${weekStart}T00:00:00`);
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
-  const fmt = (d: Date): string => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const fmt = (d: Date): string =>
+    d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return `${fmt(start)} – ${fmt(end)}`;
 }
 

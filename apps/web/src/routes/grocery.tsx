@@ -1,13 +1,12 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { useState } from 'react';
-
 import {
   SECTION_LABELS,
   STORE_SECTIONS,
-  sectionSchema,
   type StoreSection,
+  sectionSchema,
 } from '@mealforge/shared/schemas';
 import { weekStartOf } from '@mealforge/shared/utils';
+import { createFileRoute } from '@tanstack/react-router';
+import { useState } from 'react';
 
 import { EmptyState } from '../components/EmptyState';
 import { trpc } from '../lib/trpc';
@@ -94,7 +93,9 @@ function GroceryPage(): React.ReactElement {
                   key={item.id}
                   item={item}
                   onToggle={() => setChecked.mutate({ itemId: item.id, checked: true })}
-                  onRemove={item.isManual ? () => removeItem.mutate({ itemId: item.id }) : undefined}
+                  onRemove={
+                    item.isManual ? () => removeItem.mutate({ itemId: item.id }) : undefined
+                  }
                 />
               ))}
           </ul>
@@ -159,7 +160,9 @@ function GroceryRow({ item, onToggle, onRemove }: GroceryRowProps): React.ReactE
         </span>
         <span className={`flex-1 text-[0.95rem] ${item.checked ? 'text-check line-through' : ''}`}>
           {item.name}
-          {item.isManual && <span className="ml-1.5 font-quant text-[0.6rem] uppercase text-check">added</span>}
+          {item.isManual && (
+            <span className="ml-1.5 font-quant text-[0.6rem] uppercase text-check">added</span>
+          )}
         </span>
         {item.quantityText.length > 0 && (
           <span className="shrink-0 font-quant text-sm text-ink-soft">{item.quantityText}</span>

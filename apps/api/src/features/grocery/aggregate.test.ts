@@ -1,8 +1,7 @@
-import fc from 'fast-check';
-import { describe, expect, it } from 'vitest';
-
 import type { IngredientInput } from '@mealforge/shared/schemas';
 import { STORE_SECTIONS } from '@mealforge/shared/schemas';
+import fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
 
 import { aggregateIngredients, normalizedKey } from './aggregate';
 

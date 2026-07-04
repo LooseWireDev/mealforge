@@ -1,7 +1,6 @@
+import { SECTION_LABELS, STORE_SECTIONS, type StoreSection } from '@mealforge/shared/schemas';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-
-import { SECTION_LABELS, STORE_SECTIONS, type StoreSection } from '@mealforge/shared/schemas';
 
 import { FavoriteButton } from '../features/recipes/FavoriteButton';
 import { splitSteps, stepsToHtml } from '../lib/steps';
@@ -85,9 +84,10 @@ function RecipeDetailPage(): React.ReactElement {
           Ingredients
         </h2>
         <div className="overflow-hidden rounded-xl border border-line bg-card">
-          {[...STORE_SECTIONS.filter((s) => bySection.has(s)), ...[...bySection.keys()].filter(
-            (s) => !STORE_SECTIONS.includes(s as StoreSection),
-          )].map((section) => (
+          {[
+            ...STORE_SECTIONS.filter((s) => bySection.has(s)),
+            ...[...bySection.keys()].filter((s) => !STORE_SECTIONS.includes(s as StoreSection)),
+          ].map((section) => (
             <div key={section} className="border-b border-line last:border-b-0">
               {bySection.size > 1 && (
                 <p className="border-b border-line bg-paper px-4 py-1.5 font-quant text-[0.65rem] font-semibold uppercase tracking-widest text-ink-soft">
@@ -96,7 +96,10 @@ function RecipeDetailPage(): React.ReactElement {
               )}
               <ul>
                 {(bySection.get(section) ?? []).map((ingredient) => (
-                  <li key={ingredient.id} className="flex justify-between gap-3 px-4 py-2.5 text-sm">
+                  <li
+                    key={ingredient.id}
+                    className="flex justify-between gap-3 px-4 py-2.5 text-sm"
+                  >
                     <span>{ingredient.name}</span>
                     <span className="shrink-0 font-quant text-ink-soft">
                       {formatQuantity(ingredient.quantity, ingredient.unit) || 'to taste'}
@@ -130,7 +133,13 @@ function RecipeDetailPage(): React.ReactElement {
   );
 }
 
-function CookMode({ title, stepsMarkdown }: { title: string; stepsMarkdown: string }): React.ReactElement {
+function CookMode({
+  title,
+  stepsMarkdown,
+}: {
+  title: string;
+  stepsMarkdown: string;
+}): React.ReactElement {
   const navigate = useNavigate();
   const { recipeId } = Route.useParams();
   const steps = splitSteps(stepsMarkdown);

@@ -1,14 +1,16 @@
 // tRPC primitives live in trpcInit.ts so feature routers can import them from
 // here without a circular-evaluation trap: the trpcInit import below runs
 // before any feature router, and the re-exports resolve through to it.
-import { publicProcedure, router } from './trpcInit';
+
+import { groceryRouter } from './features/grocery/router';
 import { plansRouter } from './features/plans/router';
 import { recipesRouter } from './features/recipes/router';
-import { groceryRouter } from './features/grocery/router';
+import { publicProcedure, router } from './trpcInit';
+
 // forge:feature-imports — the feature generator inserts router imports above this line
 
-export { publicProcedure, router } from './trpcInit';
 export type { Context } from './trpcInit';
+export { publicProcedure, router } from './trpcInit';
 
 export const appRouter = router({
   health: publicProcedure.query((): { status: string } => {

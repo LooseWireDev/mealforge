@@ -1,7 +1,6 @@
+import type { PushMealPlanInput, RecipeInput } from '@mealforge/shared/schemas';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { beforeEach, describe, expect, it } from 'vitest';
-
-import type { PushMealPlanInput, RecipeInput } from '@mealforge/shared/schemas';
 
 import { createDb, type Db } from '../../db/client';
 import { addManualItem, itemsForPlan, setChecked } from '../grocery/service';

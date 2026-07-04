@@ -8,4 +8,6 @@ data/
 .turbo/
 
 .claude/worktrees
-.claude/settings.local.json
+.claude/settings.local.jsone2e/.tmp
+test-results
+playwright-report

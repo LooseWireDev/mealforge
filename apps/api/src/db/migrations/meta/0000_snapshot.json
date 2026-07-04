@@ -79,10 +79,7 @@
       "indexes": {
         "grocery_items_plan_id_normalized_key_unique": {
           "name": "grocery_items_plan_id_normalized_key_unique",
-          "columns": [
-            "plan_id",
-            "normalized_key"
-          ],
+          "columns": ["plan_id", "normalized_key"],
           "isUnique": true
         }
       },
@@ -91,12 +88,8 @@
           "name": "grocery_items_plan_id_meal_plans_id_fk",
           "tableFrom": "grocery_items",
           "tableTo": "meal_plans",
-          "columnsFrom": [
-            "plan_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["plan_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -148,9 +141,7 @@
       "indexes": {
         "meal_plans_week_start_unique": {
           "name": "meal_plans_week_start_unique",
-          "columns": [
-            "week_start"
-          ],
+          "columns": ["week_start"],
           "isUnique": true
         }
       },
@@ -202,11 +193,7 @@
       "indexes": {
         "meals_plan_id_day_of_week_meal_type_unique": {
           "name": "meals_plan_id_day_of_week_meal_type_unique",
-          "columns": [
-            "plan_id",
-            "day_of_week",
-            "meal_type"
-          ],
+          "columns": ["plan_id", "day_of_week", "meal_type"],
           "isUnique": true
         }
       },
@@ -215,12 +202,8 @@
           "name": "meals_plan_id_meal_plans_id_fk",
           "tableFrom": "meals",
           "tableTo": "meal_plans",
-          "columnsFrom": [
-            "plan_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["plan_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -228,12 +211,8 @@
           "name": "meals_recipe_id_recipes_id_fk",
           "tableFrom": "meals",
           "tableTo": "recipes",
-          "columnsFrom": [
-            "recipe_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["recipe_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -303,12 +282,8 @@
           "name": "recipe_ingredients_recipe_id_recipes_id_fk",
           "tableFrom": "recipe_ingredients",
           "tableTo": "recipes",
-          "columnsFrom": [
-            "recipe_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["recipe_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

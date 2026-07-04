@@ -1,7 +1,6 @@
+import { pushMealPlanSchema } from '@mealforge/shared/schemas';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-
-import { pushMealPlanSchema } from '@mealforge/shared/schemas';
 
 import type { Db } from '../db/client';
 import { getPlanByWeek, getRecentPlans, pushMealPlan } from '../features/plans/service';

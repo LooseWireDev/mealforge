@@ -43,10 +43,15 @@ function RecipesPage(): React.ReactElement {
         className="w-full rounded-xl border border-line bg-card px-4 py-3 text-[16px] placeholder:text-check focus:border-leaf focus:outline-none"
       />
 
-      <div role="tablist" aria-label="Recipe lists" className="flex rounded-xl border border-line bg-card p-1">
+      <div
+        role="tablist"
+        aria-label="Recipe lists"
+        className="flex rounded-xl border border-line bg-card p-1"
+      >
         {(['favorites', 'history'] as const).map((t) => (
           <button
             key={t}
+            type="button"
             role="tab"
             aria-selected={tab === t}
             onClick={() => setTab(t)}
