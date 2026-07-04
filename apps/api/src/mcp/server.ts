@@ -3,8 +3,15 @@ import { z } from 'zod';
 
 import type { Db } from '../db/client';
 import { getPlanByWeek, getRecentPlans, pushMealPlan } from '../features/plans/service';
-import { getRecipe, listFavorites, listRecipes } from '../features/recipes/service';
-import { formatZodIssues, normalizePush, pushWireShape, toInt } from './wire';
+import { createRecipe, getRecipe, listFavorites, listRecipes } from '../features/recipes/service';
+import {
+  formatZodIssues,
+  normalizePush,
+  normalizeRecipe,
+  pushWireShape,
+  recipeWireShape,
+  toInt,
+} from './wire';
 
 function appUrl(): string {
   return process.env.APP_URL ?? 'http://localhost:3000';
@@ -34,7 +41,8 @@ export function createMcpServer(db: Db): McpServer {
       title: 'Push a weekly meal plan',
       description:
         'Push a FINALIZED weekly meal plan to the mealforge app. Only call this after the user has explicitly confirmed the plan is final — never push drafts. ' +
-        'Each meal needs either a full "recipe" object (a brand-new recipe you authored) or a "recipeId" of a past recipe to reuse (find ids via search_recipes, list_favorites, or get_recipe). ' +
+        'RECOMMENDED FLOW: first save each new recipe with create_recipe, then call this tool with small meals entries that reference recipeId only. ' +
+        'Inline "recipe" objects are also accepted for each meal, but keep those payloads small. ' +
         'The grocery list is derived automatically from the recipes’ structured ingredients, so ingredient quantities, units, and store sections must be accurate. ' +
         'Re-pushing the same weekStart replaces that week’s meals and regenerates the grocery list; unchanged items keep their checked-off state. ' +
         'Returns the plan summary and the app URL to share with the user.',
@@ -44,6 +52,31 @@ export function createMcpServer(db: Db): McpServer {
       try {
         const result = pushMealPlan(db, normalizePush(input));
         return textResult({ ...result, appUrl: appUrl() });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return errorResult(new Error(formatZodIssues(error)));
+        }
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    'create_recipe',
+    {
+      title: 'Create a recipe',
+      description:
+        'Save one new recipe and get back its recipeId. Preferred way to build a meal plan: create each recipe individually (small, flat payloads), then call push_meal_plan once with recipeId references. The recipe is stored immediately and reusable in any week. Returns the recipeId.',
+      inputSchema: recipeWireShape,
+    },
+    (input) => {
+      try {
+        const recipe = createRecipe(db, normalizeRecipe(input));
+        return textResult({
+          recipeId: recipe.id,
+          title: recipe.title,
+          next: 'Reference this recipeId in push_meal_plan when the user confirms the week.',
+        });
       } catch (error) {
         if (error instanceof z.ZodError) {
           return errorResult(new Error(formatZodIssues(error)));

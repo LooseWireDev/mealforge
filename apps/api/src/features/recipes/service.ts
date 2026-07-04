@@ -1,3 +1,4 @@
+import type { RecipeInput } from '@mealforge/shared/schemas';
 import { and, desc, eq, inArray, like, or } from 'drizzle-orm';
 
 import type { Db } from '../../db/client';
@@ -87,6 +88,38 @@ export function listRecipes(
     .limit(limit)
     .all()
     .map(toSummary);
+}
+
+export function createRecipe(db: Db, input: RecipeInput): RecipeSummary {
+  return db.transaction((tx) => {
+    const inserted = tx
+      .insert(recipes)
+      .values({
+        title: input.title,
+        description: input.description,
+        servings: input.servings,
+        prepMinutes: input.prepMinutes,
+        cookMinutes: input.cookMinutes,
+        tags: input.tags,
+        stepsMarkdown: input.stepsMarkdown,
+        source: 'agent',
+      })
+      .returning()
+      .get();
+    tx.insert(recipeIngredients)
+      .values(
+        input.ingredients.map((ingredient, i) => ({
+          recipeId: inserted.id,
+          name: ingredient.name,
+          quantity: ingredient.quantity,
+          unit: ingredient.unit,
+          section: ingredient.section,
+          sortOrder: i,
+        })),
+      )
+      .run();
+    return toSummary(inserted);
+  });
 }
 
 export function getRecipe(db: Db, id: number): RecipeDetail | null {

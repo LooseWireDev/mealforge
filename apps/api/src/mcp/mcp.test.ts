@@ -102,9 +102,10 @@ describe('MCP endpoint', () => {
     });
   });
 
-  it('lists the six mealforge tools', async () => {
+  it('lists the seven mealforge tools', async () => {
     const result = (await rpc(app, 'tools/list')) as { tools: Array<{ name: string }> };
     expect(result.tools.map((t) => t.name).sort()).toEqual([
+      'create_recipe',
       'get_meal_plan_for_week',
       'get_recent_meal_plans',
       'get_recipe',
@@ -186,6 +187,59 @@ describe('MCP endpoint', () => {
     };
     expect(payload.meals[0]?.title).toBe('Shrimp Scampi');
     expect(payload.groceryItemCount).toBe(3);
+  });
+
+  it('tolerates double-wrapped arrays (small-model wire format)', async () => {
+    // regression: MiniMax-M3 also sends tags/ingredients as nested arrays
+    const result = await callTool(app, 'push_meal_plan', {
+      weekStart: '2026-07-13',
+      meals: [
+        {
+          dayOfWeek: 0,
+          recipe: {
+            title: 'Nested Arrays',
+            servings: 4,
+            stepsMarkdown: '1. Cook.',
+            tags: [['seafood', 'pasta']],
+            ingredients: [
+              [
+                { name: 'shrimp', quantity: 1, unit: 'lb', section: 'meat-seafood' },
+                { name: 'linguine', quantity: 1, unit: 'lb', section: 'pantry' },
+              ],
+            ],
+          },
+        },
+      ],
+    });
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(result.content[0]?.text ?? '{}') as { groceryItemCount: number };
+    expect(payload.groceryItemCount).toBe(2);
+  });
+
+  it('create_recipe returns a recipeId usable by push_meal_plan', async () => {
+    const created = await callTool(app, 'create_recipe', {
+      title: 'Standalone Carnitas',
+      description: 'Made via create_recipe.',
+      servings: '6',
+      prepMinutes: '15',
+      cookMinutes: '480',
+      tags: ['slow-cooker'],
+      stepsMarkdown: '1. Slow cook.\n2. Broil.',
+      ingredients: [{ name: 'pork shoulder', quantity: '3', unit: 'lb', section: 'meat-seafood' }],
+    });
+    expect(created.isError).toBeFalsy();
+    const { recipeId } = JSON.parse(created.content[0]?.text ?? '{}') as { recipeId: number };
+    expect(recipeId).toBeGreaterThan(0);
+
+    const pushed = await callTool(app, 'push_meal_plan', {
+      weekStart: '2026-07-20',
+      meals: [{ dayOfWeek: 4, mealType: 'dinner', recipeId }],
+    });
+    expect(pushed.isError).toBeFalsy();
+    const payload = JSON.parse(pushed.content[0]?.text ?? '{}') as {
+      meals: Array<{ title: string }>;
+    };
+    expect(payload.meals[0]?.title).toBe('Standalone Carnitas');
   });
 
   it('reports the exact field path when a value cannot be coerced', async () => {

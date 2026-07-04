@@ -15,10 +15,10 @@ echo "$INIT" | grep -q '"serverInfo"' && echo "    ok: $(echo "$INIT" | grep -o 
 
 echo "==> tools/list"
 TOOLS=$(curl -sf -X POST "$MCP" "${HDRS[@]}" -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | json_of)
-for tool in push_meal_plan get_recent_meal_plans get_meal_plan_for_week list_favorites search_recipes get_recipe; do
+for tool in push_meal_plan create_recipe get_recent_meal_plans get_meal_plan_for_week list_favorites search_recipes get_recipe; do
   echo "$TOOLS" | grep -q "\"$tool\"" || { echo "MISSING TOOL: $tool"; exit 1; }
 done
-echo "    ok: all 6 tools present"
+echo "    ok: all 7 tools present"
 
 # next Monday, so a test push never collides with the real current week
 WEEK=$(date -d 'next monday' +%F 2>/dev/null || date -v +Mon +%F)
