@@ -68,14 +68,19 @@ Then restart the LibreChat container and enable the `mealforge` tools for your a
 
 Any client that speaks MCP over streamable HTTP works — point it at `http://<host>:8090/mcp`. No auth headers are required (see the security note above).
 
-### Suggested instructions for your meal-planning assistant
+### Give your agent the meal-planning skill
 
-> You have mealforge tools for the family meal-planning app. When we plan a week's dinners: call `get_recent_meal_plans` first and avoid repeating the last few weeks; use `list_favorites` / `search_recipes` when I ask for something we've had before. Draft and iterate the plan in chat only. When I explicitly confirm the plan is final, call `push_meal_plan` once with the full week — every recipe complete with structured ingredients (name, quantity, unit, store section) and markdown steps; pass `recipeId` instead of a full recipe to reuse a past one. After pushing, share the app link. If we revise an already-pushed week, re-push the same `weekStart`. Never push drafts.
+The repo ships a ready-made agent skill at [`skills/weekly-meal-planning/SKILL.md`](skills/weekly-meal-planning/SKILL.md). It teaches an agent the whole workflow: gather history first, draft the week in conversation, publish only on explicit command via the reliable two-step flow (`create_recipe` per recipe, then one `push_meal_plan` with recipeIds), keep ingredient data grocery-list-clean, and recover from validation errors. Strongly recommended — especially with smaller models.
+
+- **Claude Code / Agent Skills**: copy the `skills/weekly-meal-planning/` directory into your skills folder (e.g. `~/.claude/skills/`).
+- **LibreChat**: paste the body of `SKILL.md` into your meal-planning agent's instructions (or attach it as an agent skill/file).
+- **Anything else**: it's plain markdown — hand it to your agent however that client takes instructions.
 
 ## MCP tools
 
 | Tool | Purpose |
 |---|---|
+| `create_recipe` | Save one recipe (flat payload) and get back a `recipeId` — the reliable first step before `push_meal_plan`. |
 | `push_meal_plan` | Push a finalized week (new recipes and/or `recipeId` reuses). Re-pushing the same `weekStart` revises the week; checked-off grocery items that didn't change stay checked. |
 | `get_recent_meal_plans` | Recent weeks with meal titles — for repeat-avoidance. |
 | `get_meal_plan_for_week` | The plan for a specific week, if any. |
