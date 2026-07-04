@@ -242,6 +242,50 @@ describe('MCP endpoint', () => {
     expect(payload.meals[0]?.title).toBe('Standalone Carnitas');
   });
 
+  it('canonicalizes section names and ignores unknown extra keys', async () => {
+    const result = await callTool(app, 'push_meal_plan', {
+      weekStart: '2026-07-13',
+      meals: [
+        {
+          dayOfWeek: 0,
+          notes: 'extra key models like to add',
+          recipe: {
+            title: 'Section Variants',
+            servings: 4,
+            stepsMarkdown: '1. Cook.',
+            difficulty: 'easy',
+            ingredients: [
+              { name: 'steak', quantity: 1, unit: 'lb', section: 'Meat & Seafood' },
+              { name: 'cheddar', quantity: 8, unit: 'oz', section: 'DAIRY EGGS' },
+            ],
+          },
+        },
+      ],
+    });
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(result.content[0]?.text ?? '{}') as { groceryItemCount: number };
+    expect(payload.groceryItemCount).toBe(2);
+  });
+
+  it('missing required recipe fields produce a path error with a valid example', async () => {
+    const result = await callTool(app, 'push_meal_plan', {
+      weekStart: '2026-07-13',
+      meals: [
+        {
+          dayOfWeek: 0,
+          recipe: {
+            title: 'No Steps',
+            ingredients: [{ name: 'x', quantity: 1, unit: 'lb', section: 'pantry' }],
+          },
+        },
+      ],
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content[0]?.text ?? '';
+    expect(text).toContain('stepsMarkdown');
+    expect(text).toContain('Valid example:');
+  });
+
   it('reports the exact field path when a value cannot be coerced', async () => {
     const result = await callTool(app, 'push_meal_plan', {
       weekStart: '2026-07-13',

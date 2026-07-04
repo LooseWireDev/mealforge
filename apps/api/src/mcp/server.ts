@@ -5,10 +5,11 @@ import type { Db } from '../db/client';
 import { getPlanByWeek, getRecentPlans, pushMealPlan } from '../features/plans/service';
 import { createRecipe, getRecipe, listFavorites, listRecipes } from '../features/recipes/service';
 import {
-  formatZodIssues,
   normalizePush,
   normalizeRecipe,
+  PUSH_EXAMPLE,
   pushWireShape,
+  RECIPE_EXAMPLE,
   recipeWireShape,
   toInt,
 } from './wire';
@@ -29,6 +30,15 @@ function errorResult(error: unknown): {
   return { content: [{ type: 'text', text: message }], isError: true };
 }
 
+// Rejected payloads go to the container log so failures are debuggable from
+// `docker logs mealforge` instead of spelunking the client's message store.
+function logRejection(tool: string, input: unknown, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  console.warn(
+    `[mcp] ${tool} rejected: ${message}\n[mcp] payload: ${JSON.stringify(input)?.slice(0, 2000)}`,
+  );
+}
+
 // A fresh server is created per request (stateless streamable-http), so
 // registration cost must stay trivial — these are thin wrappers over the
 // same service layer the web app's tRPC routers use.
@@ -45,7 +55,8 @@ export function createMcpServer(db: Db): McpServer {
         'Inline "recipe" objects are also accepted for each meal, but keep those payloads small. ' +
         'The grocery list is derived automatically from the recipes’ structured ingredients, so ingredient quantities, units, and store sections must be accurate. ' +
         'Re-pushing the same weekStart replaces that week’s meals and regenerates the grocery list; unchanged items keep their checked-off state. ' +
-        'Returns the plan summary and the app URL to share with the user.',
+        'Returns the plan summary and the app URL to share with the user. ' +
+        `Example arguments: ${PUSH_EXAMPLE}`,
       inputSchema: pushWireShape,
     },
     (input) => {
@@ -53,9 +64,7 @@ export function createMcpServer(db: Db): McpServer {
         const result = pushMealPlan(db, normalizePush(input));
         return textResult({ ...result, appUrl: appUrl() });
       } catch (error) {
-        if (error instanceof z.ZodError) {
-          return errorResult(new Error(formatZodIssues(error)));
-        }
+        logRejection('push_meal_plan', input, error);
         return errorResult(error);
       }
     },
@@ -66,7 +75,8 @@ export function createMcpServer(db: Db): McpServer {
     {
       title: 'Create a recipe',
       description:
-        'Save one new recipe and get back its recipeId. Preferred way to build a meal plan: create each recipe individually (small, flat payloads), then call push_meal_plan once with recipeId references. The recipe is stored immediately and reusable in any week. Returns the recipeId.',
+        'Save one new recipe and get back its recipeId. Preferred way to build a meal plan: create each recipe individually (small, flat payloads), then call push_meal_plan once with recipeId references. The recipe is stored immediately and reusable in any week. Returns the recipeId. ' +
+        `Example arguments: ${RECIPE_EXAMPLE}`,
       inputSchema: recipeWireShape,
     },
     (input) => {
@@ -78,9 +88,7 @@ export function createMcpServer(db: Db): McpServer {
           next: 'Reference this recipeId in push_meal_plan when the user confirms the week.',
         });
       } catch (error) {
-        if (error instanceof z.ZodError) {
-          return errorResult(new Error(formatZodIssues(error)));
-        }
+        logRejection('create_recipe', input, error);
         return errorResult(error);
       }
     },
