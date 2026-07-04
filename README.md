@@ -25,7 +25,7 @@ Meal-planning apps limit you to their recipe catalog. mealforge has **no catalog
 
 ```bash
 mkdir mealforge && cd mealforge
-curl -O https://raw.githubusercontent.com/gavdevs/mealforge/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/loosewiredev/mealforge/main/docker-compose.yml
 docker compose up -d
 ```
 
