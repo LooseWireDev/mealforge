@@ -8,7 +8,7 @@ export function createTRPCClient(): ReturnType<typeof trpc.createClient> {
   return trpc.createClient({
     links: [
       httpBatchLink({
-        url: 'http://localhost:3000/trpc',
+        url: '/trpc',
       }),
     ],
   });

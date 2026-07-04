@@ -17,7 +17,6 @@
     "@mealforge/shared": "workspace:*",
     "@trpc/client": "^11.18.0",
     "@trpc/react-query": "^11.18.0",
-    "better-auth": "^1.6.23",
     "tailwindcss": "^4.3.2"
   },
   "devDependencies": {

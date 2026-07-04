@@ -9,7 +9,6 @@ function RootLayout(): React.ReactElement {
     <div>
       <nav>
         <Link to="/">Home</Link>
-        <Link to="/login">Login</Link>
       </nav>
       <main>
         <Outlet />

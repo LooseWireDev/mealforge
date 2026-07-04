@@ -1,30 +1,20 @@
-import { TRPCError, initTRPC } from '@trpc/server';
-import { auth } from './auth/auth';
+import { initTRPC } from '@trpc/server';
+import { type Db, db } from './db/client';
 // forge:feature-imports — the feature generator inserts router imports above this line
 
-type Session = typeof auth.$Infer.Session;
-
-export interface Context {
+export type Context = {
   req: Request;
-  session: Session | null;
-}
+  db: Db;
+};
 
 export async function createContext({ req }: { req: Request }): Promise<Context> {
-  const session = await auth.api.getSession({ headers: req.headers });
-  return { req, session };
+  return { req, db };
 }
 
 const t = initTRPC.context<Context>().create();
 
 export const router = t.router;
 export const publicProcedure = t.procedure;
-
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
-  if (!ctx.session) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
-  }
-  return next({ ctx: { ...ctx, session: ctx.session } });
-});
 
 export const appRouter = router({
   health: publicProcedure.query((): { status: string } => {
