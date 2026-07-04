@@ -153,6 +153,61 @@ describe('MCP endpoint', () => {
     expect(full.usedInWeeks).toEqual(['2026-07-06']);
   });
 
+  it('accepts numbers sent as strings and fraction quantities (small-model wire format)', async () => {
+    // regression: MiniMax-M3 sends every number inside the nested recipe as a
+    // string, which a strict published schema rejects client-side in LibreChat
+    const result = await callTool(app, 'push_meal_plan', {
+      weekStart: '2026-07-13',
+      meals: [
+        {
+          dayOfWeek: '0',
+          mealType: 'dinner',
+          recipe: {
+            title: 'Shrimp Scampi',
+            description: 'Garlic butter shrimp.',
+            servings: '4',
+            prepMinutes: '10',
+            cookMinutes: '15',
+            tags: ['seafood'],
+            stepsMarkdown: '1. Cook it.',
+            ingredients: [
+              { name: 'shrimp', quantity: '1.5', unit: 'lb', section: 'meat-seafood' },
+              { name: 'butter', quantity: '1/2', unit: 'cup', section: 'dairy-eggs' },
+              { name: 'kosher salt', quantity: null, unit: null, section: 'spices' },
+            ],
+          },
+        },
+      ],
+    });
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(result.content[0]?.text ?? '{}') as {
+      meals: Array<{ title: string }>;
+      groceryItemCount: number;
+    };
+    expect(payload.meals[0]?.title).toBe('Shrimp Scampi');
+    expect(payload.groceryItemCount).toBe(3);
+  });
+
+  it('reports the exact field path when a value cannot be coerced', async () => {
+    const result = await callTool(app, 'push_meal_plan', {
+      weekStart: '2026-07-13',
+      meals: [
+        {
+          dayOfWeek: 0,
+          recipe: {
+            title: 'Bad Quantity',
+            stepsMarkdown: '1. x',
+            ingredients: [
+              { name: 'flour', quantity: 'a pinch or two', unit: 'cup', section: 'pantry' },
+            ],
+          },
+        },
+      ],
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain('meals.0.recipe.ingredients.0.quantity');
+  });
+
   it('push_meal_plan returns a friendly error for an invalid meal', async () => {
     const result = await callTool(app, 'push_meal_plan', {
       weekStart: '2026-07-06',

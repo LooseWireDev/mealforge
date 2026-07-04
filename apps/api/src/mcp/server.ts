@@ -1,10 +1,10 @@
-import { pushMealPlanSchema } from '@mealforge/shared/schemas';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import type { Db } from '../db/client';
 import { getPlanByWeek, getRecentPlans, pushMealPlan } from '../features/plans/service';
 import { getRecipe, listFavorites, listRecipes } from '../features/recipes/service';
+import { formatZodIssues, normalizePush, pushWireShape, toInt } from './wire';
 
 function appUrl(): string {
   return process.env.APP_URL ?? 'http://localhost:3000';
@@ -38,13 +38,16 @@ export function createMcpServer(db: Db): McpServer {
         'The grocery list is derived automatically from the recipes’ structured ingredients, so ingredient quantities, units, and store sections must be accurate. ' +
         'Re-pushing the same weekStart replaces that week’s meals and regenerates the grocery list; unchanged items keep their checked-off state. ' +
         'Returns the plan summary and the app URL to share with the user.',
-      inputSchema: pushMealPlanSchema.shape,
+      inputSchema: pushWireShape,
     },
     (input) => {
       try {
-        const result = pushMealPlan(db, input);
+        const result = pushMealPlan(db, normalizePush(input));
         return textResult({ ...result, appUrl: appUrl() });
       } catch (error) {
+        if (error instanceof z.ZodError) {
+          return errorResult(new Error(formatZodIssues(error)));
+        }
         return errorResult(error);
       }
     },
@@ -56,9 +59,9 @@ export function createMcpServer(db: Db): McpServer {
       title: 'List recent meal plans',
       description:
         'List the most recent weekly meal plans with their meal titles and recipe ids. Call this before drafting a new week so you avoid repeating recent meals (unless the user asks for a repeat).',
-      inputSchema: { limit: z.number().int().min(1).max(12).default(4) },
+      inputSchema: { limit: z.union([z.number(), z.string()]).default(4) },
     },
-    ({ limit }) => textResult(getRecentPlans(db, limit)),
+    ({ limit }) => textResult(getRecentPlans(db, Math.min(Math.max(toInt(limit, 4), 1), 12))),
   );
 
   server.registerTool(
@@ -100,12 +103,17 @@ export function createMcpServer(db: Db): McpServer {
       title: 'Get a full recipe',
       description:
         'Fetch a full recipe by id — ingredients, step-by-step markdown, tags, and which weeks it was cooked. Use before reusing a recipe so you can confirm it with the user.',
-      inputSchema: { recipeId: z.number().int().positive() },
+      inputSchema: { recipeId: z.union([z.number(), z.string()]) },
     },
     ({ recipeId }) => {
-      const recipe = getRecipe(db, recipeId);
-      if (!recipe) return errorResult(new Error(`Recipe ${recipeId} does not exist.`));
-      return textResult(recipe);
+      try {
+        const id = toInt(recipeId);
+        const recipe = getRecipe(db, id);
+        if (!recipe) return errorResult(new Error(`Recipe ${id} does not exist.`));
+        return textResult(recipe);
+      } catch (error) {
+        return errorResult(error);
+      }
     },
   );
 
