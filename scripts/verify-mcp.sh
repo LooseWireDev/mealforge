@@ -25,7 +25,7 @@ WEEK=$(date -d 'next monday' +%F 2>/dev/null || date -v +Mon +%F)
 
 echo "==> push_meal_plan ($WEEK)"
 PUSH=$(curl -sf -X POST "$MCP" "${HDRS[@]}" -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"push_meal_plan","arguments":{"weekStart":"'"$WEEK"'","meals":[{"dayOfWeek":0,"mealType":"dinner","recipe":{"title":"Verify Script Test Meal","description":"Pushed by verify-mcp.sh — safe to ignore.","servings":2,"prepMinutes":5,"cookMinutes":10,"tags":["test"],"stepsMarkdown":"1. This is a smoke test.","ingredients":[{"name":"test ingredient","quantity":1,"unit":"cup","section":"pantry"}]}}]}}}' | json_of)
-echo "$PUSH" | grep -q '"planId"' || { echo "PUSH FAILED: $PUSH"; exit 1; }
+echo "$PUSH" | grep -q planId || { echo "PUSH FAILED: $PUSH"; exit 1; }
 echo "    ok: plan pushed"
 
 echo "==> read back via tRPC"
