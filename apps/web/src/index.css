@@ -1,1 +1,111 @@
-@import "tailwindcss";
+@import 'tailwindcss';
+@import '@fontsource-variable/fraunces/index.css';
+
+/*
+ * mealforge tokens — "flour & cast iron"
+ * Light: flour-white paper, cast-iron green-black ink, rosemary green
+ * interactive, butter yellow accent. Dark: cast iron at night.
+ */
+:root {
+  --paper: #faf7f0;
+  --card: #ffffff;
+  --ink: #23312a;
+  --ink-soft: #5c6a61;
+  --leaf: #3e6b4f;
+  --leaf-deep: #2e523c;
+  --butter: #f0be3a;
+  --butter-soft: #fbf0d2;
+  --tomato: #bc4b2f;
+  --line: #e6dfd0;
+  --check: #9aa89f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #161c18;
+    --card: #1f2721;
+    --ink: #ece8dd;
+    --ink-soft: #a3ada5;
+    --leaf: #7fae8f;
+    --leaf-deep: #a4c9b1;
+    --butter: #e0b53e;
+    --butter-soft: #33301f;
+    --tomato: #d97757;
+    --line: #2e3831;
+    --check: #5c6a61;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-leaf: var(--leaf);
+  --color-leaf-deep: var(--leaf-deep);
+  --color-butter: var(--butter);
+  --color-butter-soft: var(--butter-soft);
+  --color-tomato: var(--tomato);
+  --color-line: var(--line);
+  --color-check: var(--check);
+  --font-display: 'Fraunces Variable', Georgia, serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-quant: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+html {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* generous tap targets everywhere on this app */
+button,
+a,
+label {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* markdown steps (recipe detail) */
+.steps-md {
+  line-height: 1.65;
+}
+.steps-md ol {
+  list-style: none;
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.steps-md ol > li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 2.4rem;
+}
+.steps-md ol > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: -0.1rem;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 1.35rem;
+  color: var(--leaf);
+}
+.steps-md p + p {
+  margin-top: 0.6rem;
+}
+.steps-md strong {
+  font-weight: 650;
+}

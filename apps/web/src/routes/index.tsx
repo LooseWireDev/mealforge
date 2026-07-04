@@ -3,49 +3,75 @@ import { createFileRoute } from '@tanstack/react-router';
 import { DAY_NAMES } from '@mealforge/shared/schemas';
 import { weekStartOf } from '@mealforge/shared/utils';
 
+import { EmptyState } from '../components/EmptyState';
+import { RecipeCard } from '../features/recipes/RecipeCard';
 import { trpc } from '../lib/trpc';
 
 export const Route = createFileRoute('/')({
   component: WeekPage,
 });
 
+function weekRangeLabel(weekStart: string): string {
+  const start = new Date(`${weekStart}T00:00:00`);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const fmt = (d: Date): string => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return `${fmt(start)} – ${fmt(end)}`;
+}
+
 function WeekPage(): React.ReactElement {
   const weekStart = weekStartOf();
+  const today = (new Date().getDay() + 6) % 7; // 0 = Monday
   const { data: plan, isLoading } = trpc.plans.byWeek.useQuery({ weekStart });
+  const recipeIds = plan?.meals.map((m) => m.recipeId) ?? [];
+  const { data: recipes } = trpc.recipes.list.useQuery(
+    { limit: 200 },
+    { enabled: recipeIds.length > 0 },
+  );
 
   if (isLoading) {
-    return <p className="p-6 text-center text-sm opacity-60">Loading…</p>;
-  }
-
-  if (!plan) {
-    return (
-      <div className="flex flex-col items-center gap-2 p-10 text-center">
-        <p className="text-4xl">🍳</p>
-        <h2 className="text-lg font-semibold">No plan for this week yet</h2>
-        <p className="max-w-xs text-sm opacity-70">
-          Ask your assistant to plan a week of meals — it will show up here with recipes and a
-          grocery list.
-        </p>
-      </div>
-    );
+    return <p className="p-8 text-center text-sm text-ink-soft">Loading your week…</p>;
   }
 
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-3 p-4">
-      <h1 className="text-xl font-bold">Week of {plan.weekStart}</h1>
-      <ul className="flex flex-col gap-2">
-        {plan.meals.map((meal) => (
-          <li
-            key={`${meal.dayOfWeek}-${meal.mealType}`}
-            className="rounded-lg border border-gray-300 p-3"
-          >
-            <p className="text-xs font-medium uppercase opacity-60">
-              {DAY_NAMES[meal.dayOfWeek] ?? `Day ${meal.dayOfWeek}`}
-            </p>
-            <p className="font-semibold">{meal.title}</p>
-          </li>
-        ))}
-      </ul>
+    <div className="flex flex-col gap-4 p-4">
+      <header className="flex items-baseline justify-between pt-2">
+        <h1 className="font-display text-2xl font-bold">This week</h1>
+        {plan && <p className="font-quant text-xs text-ink-soft">{weekRangeLabel(weekStart)}</p>}
+      </header>
+
+      {!plan ? (
+        <EmptyState
+          glyph="mise en place"
+          title="No plan for this week yet"
+          hint="Plan the week with your assistant in chat — the meals, recipes, and grocery list will land here."
+        />
+      ) : (
+        <ul className="flex flex-col gap-2.5">
+          {plan.meals.map((meal) => {
+            const recipe = recipes?.find((r) => r.id === meal.recipeId);
+            return (
+              <li key={`${meal.dayOfWeek}-${meal.mealType}`}>
+                <RecipeCard
+                  dayLabel={DAY_NAMES[meal.dayOfWeek] ?? `Day ${meal.dayOfWeek + 1}`}
+                  highlight={meal.dayOfWeek === today}
+                  recipe={
+                    recipe ?? {
+                      id: meal.recipeId,
+                      title: meal.title,
+                      description: '',
+                      tags: [],
+                      prepMinutes: null,
+                      cookMinutes: null,
+                      isFavorite: false,
+                    }
+                  }
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
