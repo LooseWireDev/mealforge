@@ -1,4 +1,7 @@
+import { existsSync } from 'node:fs';
+
 import { StreamableHTTPTransport } from '@hono/mcp';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { trpcServer } from '@hono/trpc-server';
 import { Hono } from 'hono';
 
@@ -28,6 +31,14 @@ export function buildApp(db: Db): Hono {
       createContext: async ({ req }): Promise<Context> => ({ req, db }),
     }),
   );
+
+  // Serve the built web app when it exists (production container; dev uses
+  // the Vite server + proxy instead). Registered last so /mcp and /trpc win.
+  const webDist = process.env.WEB_DIST ?? '../web/dist';
+  if (existsSync(webDist)) {
+    app.use('/*', serveStatic({ root: webDist }));
+    app.get('*', serveStatic({ path: `${webDist}/index.html` }));
+  }
 
   return app;
 }

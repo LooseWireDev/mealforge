@@ -1,17 +1,24 @@
+# Self-hosting mealforge:
+#   mkdir mealforge && cd mealforge
+#   curl -O https://raw.githubusercontent.com/gavdevs/mealforge/main/docker-compose.yml
+#   docker compose up -d
+# The app (web UI + MCP endpoint) listens on port 8090.
+# There is NO built-in auth: run this on a private network (Tailscale/VPN) or
+# behind a reverse proxy that handles authentication.
 services:
-  api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+  mealforge:
+    image: ghcr.io/gavdevs/mealforge:latest
+    # To build from source instead, comment out `image:` and uncomment:
+    # build:
+    #   context: .
+    #   dockerfile: apps/api/Dockerfile
+    container_name: mealforge
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "8090:3000"
+    environment:
+      # Public URL of this instance — returned to MCP clients so the model
+      # can link the user to the app after pushing a plan.
+      - APP_URL=${APP_URL:-http://localhost:8090}
     volumes:
       - ./data:/app/data
-    restart: unless-stopped
-  web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-    ports:
-      - "5173:5173"
-    restart: unless-stopped
