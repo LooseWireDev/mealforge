@@ -1,5 +1,5 @@
 import type { PushMealPlanInput, StoreSection } from '@mealforge/shared/schemas';
-import { and, desc, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lt, notInArray } from 'drizzle-orm';
 
 import type { Db } from '../../db/client';
 import { groceryItems, mealPlans, meals, recipeIngredients, recipes } from '../../db/schema';
@@ -201,6 +201,32 @@ export function pushMealPlan(db: Db, input: PushMealPlanInput): PushMealPlanResu
 
 export function getPlanByWeek(db: Db, weekStart: string): PlanSummary | null {
   const plan = db.select().from(mealPlans).where(eq(mealPlans.weekStart, weekStart)).get();
+  if (!plan) return null;
+  return { planId: plan.id, weekStart: plan.weekStart, meals: mealsForPlan(db, plan.id) };
+}
+
+/**
+ * The plan the household cares about right now: this week's if it exists,
+ * otherwise the nearest upcoming one (plans are usually pushed for next
+ * week before the current week rolls over), otherwise the most recent
+ * past week — an old plan beats an empty screen.
+ */
+export function getCurrentPlan(db: Db, fromWeekStart: string): PlanSummary | null {
+  const plan =
+    db
+      .select()
+      .from(mealPlans)
+      .where(gte(mealPlans.weekStart, fromWeekStart))
+      .orderBy(asc(mealPlans.weekStart))
+      .limit(1)
+      .get() ??
+    db
+      .select()
+      .from(mealPlans)
+      .where(lt(mealPlans.weekStart, fromWeekStart))
+      .orderBy(desc(mealPlans.weekStart))
+      .limit(1)
+      .get();
   if (!plan) return null;
   return { planId: plan.id, weekStart: plan.weekStart, meals: mealsForPlan(db, plan.id) };
 }

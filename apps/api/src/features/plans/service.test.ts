@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../../db/client';
 import { addManualItem, itemsForPlan, setChecked } from '../grocery/service';
 import { getRecipe, listRecipes, toggleFavorite } from '../recipes/service';
-import { getPlanByWeek, getRecentPlans, pushMealPlan } from './service';
+import { getCurrentPlan, getPlanByWeek, getRecentPlans, pushMealPlan } from './service';
 
 function testDb(): Db {
   const db = createDb(':memory:');
@@ -205,6 +205,35 @@ describe('recall', () => {
     const recent = getRecentPlans(db, 5);
     expect(recent.map((p) => p.weekStart)).toEqual(['2026-07-06', '2026-06-29']);
     expect(recent[0]?.meals[0]?.title).toBe('B');
+  });
+
+  it('getCurrentPlan prefers this week, then nearest upcoming, then most recent past', () => {
+    expect(getCurrentPlan(db, '2026-06-29')).toBeNull();
+
+    pushMealPlan(
+      db,
+      week([{ dayOfWeek: 0, mealType: 'dinner', recipe: recipe('Past') }], '2026-06-22'),
+    );
+    pushMealPlan(
+      db,
+      week([{ dayOfWeek: 0, mealType: 'dinner', recipe: recipe('Next') }], '2026-07-06'),
+    );
+    pushMealPlan(
+      db,
+      week([{ dayOfWeek: 0, mealType: 'dinner', recipe: recipe('Later') }], '2026-07-13'),
+    );
+
+    // No plan for the current week (2026-06-29) -> the nearest upcoming one wins.
+    expect(getCurrentPlan(db, '2026-06-29')?.weekStart).toBe('2026-07-06');
+
+    pushMealPlan(
+      db,
+      week([{ dayOfWeek: 0, mealType: 'dinner', recipe: recipe('Now') }], '2026-06-29'),
+    );
+    expect(getCurrentPlan(db, '2026-06-29')?.weekStart).toBe('2026-06-29');
+
+    // Only past plans -> the most recent one (an old plan beats an empty screen).
+    expect(getCurrentPlan(db, '2026-08-03')?.weekStart).toBe('2026-07-13');
   });
 
   it('listRecipes searches by title, tag, and ingredient', () => {

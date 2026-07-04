@@ -2,9 +2,9 @@ import { expect, test } from '@playwright/test';
 
 const BASE = 'http://localhost:3010';
 
-function currentWeekStart(): string {
+function weekStart(weeksFromNow = 0): string {
   const monday = new Date();
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7) + weeksFromNow * 7);
   const y = monday.getFullYear();
   const m = String(monday.getMonth() + 1).padStart(2, '0');
   const d = String(monday.getDate()).padStart(2, '0');
@@ -32,7 +32,7 @@ test.beforeAll(async () => {
     {
       name: 'push_meal_plan',
       arguments: {
-        weekStart: currentWeekStart(),
+        weekStart: weekStart(),
         meals: [
           {
             dayOfWeek: 0,
@@ -73,6 +73,35 @@ test.beforeAll(async () => {
     },
     1,
   );
+  await mcpCall(
+    'tools/call',
+    {
+      name: 'push_meal_plan',
+      arguments: {
+        weekStart: weekStart(1),
+        meals: [
+          {
+            dayOfWeek: 4,
+            mealType: 'dinner',
+            recipe: {
+              title: 'E2E Next-Week Tacos',
+              description: 'Planned ahead, like a real household.',
+              servings: 4,
+              prepMinutes: 10,
+              cookMinutes: 25,
+              tags: ['e2e'],
+              stepsMarkdown: '1. Brown the beef.\n2. Assemble the tacos.',
+              ingredients: [
+                { name: 'ground beef', quantity: 1, unit: 'lb', section: 'meat-seafood' },
+                { name: 'taco shells', quantity: 12, unit: null, section: 'pantry' },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    2,
+  );
 });
 
 test('week view shows the pushed plan', async ({ page }) => {
@@ -81,6 +110,19 @@ test('week view shows the pushed plan', async ({ page }) => {
   await expect(page.getByText('E2E Salmon')).toBeVisible();
   await expect(page.getByText('Mon', { exact: true })).toBeVisible();
   await expect(page.getByText('Wed', { exact: true })).toBeVisible();
+});
+
+test('week selector switches between planned weeks', async ({ page }) => {
+  await page.goto('/');
+  // Current week is the default when it has a plan.
+  await expect(page.getByText('E2E Roast Chicken')).toBeVisible();
+
+  await page.getByLabel('Choose a week').selectOption(weekStart(1));
+  await expect(page.getByText('E2E Next-Week Tacos')).toBeVisible();
+  await expect(page.getByText('E2E Roast Chicken')).not.toBeVisible();
+
+  await page.getByLabel('Choose a week').selectOption(weekStart());
+  await expect(page.getByText('E2E Roast Chicken')).toBeVisible();
 });
 
 test('recipe detail and cook mode', async ({ page }) => {

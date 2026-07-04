@@ -10,6 +10,7 @@ import { useState } from 'react';
 
 import { EmptyState } from '../components/EmptyState';
 import { trpc } from '../lib/trpc';
+import { weekRangeLabel } from '../lib/weekLabel';
 
 export const Route = createFileRoute('/grocery')({
   component: GroceryPage,
@@ -17,7 +18,7 @@ export const Route = createFileRoute('/grocery')({
 
 function GroceryPage(): React.ReactElement {
   const weekStart = weekStartOf();
-  const { data: plan, isLoading: planLoading } = trpc.plans.byWeek.useQuery({ weekStart });
+  const { data: plan, isLoading: planLoading } = trpc.plans.current.useQuery({ from: weekStart });
   const planId = plan?.planId;
   const utils = trpc.useUtils();
   const { data: items, isLoading: itemsLoading } = trpc.grocery.itemsForPlan.useQuery(
@@ -76,7 +77,7 @@ function GroceryPage(): React.ReactElement {
       <header className="flex items-baseline justify-between pt-2">
         <h1 className="font-display text-2xl font-bold">Grocery</h1>
         <p className="font-quant text-xs text-ink-soft">
-          {done.length}/{items.length} in the cart
+          {weekRangeLabel(plan.weekStart)} · {done.length}/{items.length} in the cart
         </p>
       </header>
 
