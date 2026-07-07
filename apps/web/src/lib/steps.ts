@@ -1,11 +1,16 @@
 import { marked } from 'marked';
 
 /**
- * Render recipe-step markdown to HTML. Content comes from the household's own
- * MCP pushes (not third parties), so marked's output is used directly.
+ * Render recipe-step markdown to HTML. The markdown arrives over the
+ * unauthenticated MCP endpoint, so raw HTML is escaped before parsing:
+ * markdown formatting still works, embedded tags render as visible text.
  */
 export function stepsToHtml(stepsMarkdown: string): string {
-  return marked.parse(stepsMarkdown, { async: false });
+  const escaped = stepsMarkdown
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+  return marked.parse(escaped, { async: false });
 }
 
 /**

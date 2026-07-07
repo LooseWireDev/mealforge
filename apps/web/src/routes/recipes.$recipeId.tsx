@@ -12,7 +12,7 @@ interface RecipeSearch {
 
 export const Route = createFileRoute('/recipes/$recipeId')({
   validateSearch: (search: Record<string, unknown>): RecipeSearch =>
-    search['cook'] === true || search['cook'] === 'true' ? { cook: true } : {},
+    search.cook === true || search.cook === 'true' ? { cook: true } : {},
   component: RecipeDetailPage,
 });
 
@@ -118,7 +118,7 @@ function RecipeDetailPage(): React.ReactElement {
         </h2>
         <div
           className="steps-md rounded-xl border border-line bg-card p-4 text-[0.95rem]"
-          // recipe markdown comes from the household's own agent pushes
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: stepsToHtml escapes raw HTML before markdown parsing (see steps.test.ts)
           dangerouslySetInnerHTML={{ __html: stepsToHtml(recipe.stepsMarkdown) }}
         />
       </section>
