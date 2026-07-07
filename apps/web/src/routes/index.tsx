@@ -64,7 +64,10 @@ function WeekPage(): React.ReactElement {
                 </option>
               ))}
             </select>
-            <span aria-hidden className="pointer-events-none absolute right-0 top-1 text-sm text-ink-soft">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute right-0 top-1 text-sm text-ink-soft"
+            >
               ▾
             </span>
           </label>

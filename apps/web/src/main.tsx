@@ -28,7 +28,8 @@ function App(): React.ReactElement {
   );
 }
 
-const rootElement = document.getElementById('root')!;
+const rootElement = document.getElementById('root');
+if (!rootElement) throw new Error('missing #root element');
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <App />

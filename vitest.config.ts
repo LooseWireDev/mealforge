@@ -5,5 +5,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     passWithNoTests: true,
+    // e2e/ is Playwright's turf — vitest must not collect those specs
+    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
   },
 });

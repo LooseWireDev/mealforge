@@ -15,8 +15,7 @@ export function FavoriteButton({ recipeId, isFavorite }: FavoriteButtonProps): R
   });
 
   return (
-    // span with role=button: this control often sits inside the card's own
-    // expand <button>, and nested <button>s are invalid HTML
+    // biome-ignore lint/a11y/useSemanticElements: this control often sits inside the card's own expand <button>, and nested <button>s are invalid HTML
     <span
       role="button"
       tabIndex={0}

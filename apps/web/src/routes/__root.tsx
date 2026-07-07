@@ -15,7 +15,7 @@ const TABS = [
         stroke="currentColor"
         strokeWidth="1.8"
         className="size-6"
-        aria-hidden
+        aria-hidden="true"
       >
         <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
         <path d="M3.5 9.5h17M8 3v4M16 3v4" />
@@ -32,7 +32,7 @@ const TABS = [
         stroke="currentColor"
         strokeWidth="1.8"
         className="size-6"
-        aria-hidden
+        aria-hidden="true"
       >
         <path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H19v17.5H7.5A2.5 2.5 0 0 0 5 22z" />
         <path d="M5 19.5A2.5 2.5 0 0 1 7.5 17H19M9 6.5h6" />
@@ -49,7 +49,7 @@ const TABS = [
         stroke="currentColor"
         strokeWidth="1.8"
         className="size-6"
-        aria-hidden
+        aria-hidden="true"
       >
         <path d="M4 7.5h16l-1.6 11a2 2 0 0 1-2 1.7H7.6a2 2 0 0 1-2-1.7z" />
         <path d="M8.5 10.5V6a3.5 3.5 0 0 1 7 0v4.5" />

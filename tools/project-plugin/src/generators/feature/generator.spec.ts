@@ -91,7 +91,7 @@ describe('feature generator', () => {
 
       await featureGenerator(tree, { name: 'billing', apps: 'api' });
 
-      const trpc = tree.read('apps/api/src/trpc.ts', 'utf-8')!;
+      const trpc = tree.read('apps/api/src/trpc.ts', 'utf-8') ?? '';
       expect(trpc).toContain("import { billingRouter } from './features/billing/router';");
       expect(trpc).toContain('billing: billingRouter,');
     });
@@ -102,7 +102,7 @@ describe('feature generator', () => {
       await featureGenerator(tree, { name: 'billing', apps: 'api' });
       await featureGenerator(tree, { name: 'billing', apps: 'api' });
 
-      const trpc = tree.read('apps/api/src/trpc.ts', 'utf-8')!;
+      const trpc = tree.read('apps/api/src/trpc.ts', 'utf-8') ?? '';
       expect(trpc.match(/billing: billingRouter,/g)).toHaveLength(1);
     });
 
