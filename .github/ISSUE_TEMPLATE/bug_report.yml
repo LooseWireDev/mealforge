@@ -1,0 +1,45 @@
+name: Bug report
+description: Something broke in the app, the MCP endpoint, or the Docker setup
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Web app (plan view, recipes, cook mode, grocery list)
+        - MCP endpoint / tools
+        - Docker / self-hosting
+        - Agent skill (skills/weekly-meal-planning)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Image tag or commit
+      placeholder: latest / v0.x / sha-abc1234
+  - type: input
+    id: client
+    attributes:
+      label: MCP client (if relevant)
+      placeholder: LibreChat 0.8, Claude Code, Claude Desktop, …
+  - type: textarea
+    id: verify
+    attributes:
+      label: Output of scripts/verify-mcp.sh (for MCP issues)
+      description: "`bash <(curl -fsSL https://raw.githubusercontent.com/loosewiredev/mealforge/main/scripts/verify-mcp.sh) http://<host>:8090`"
+      render: shell
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: "`docker compose logs mealforge` around the time it happened"
+      render: shell

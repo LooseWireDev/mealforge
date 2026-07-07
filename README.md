@@ -30,6 +30,10 @@ Meal-planning apps limit you to their recipe catalog. mealforge has **no catalog
 3. **mealforge derives the grocery list** automatically: ingredients aggregated across recipes ("2 cups" + "1 cup" → "3 cups"), grouped by store section, checkable while you shop.
 4. **Favorite what you loved.** The model can recall favorites and past recipes next week ("give me one of my favorites") and avoids repeating recent meals.
 
+Here's the moment the plan lands, end to end — empty week, MCP push, recipe, cook mode, grocery run:
+
+<p align="center"><img src="docs/demo.gif" width="390" alt="Demo: an empty week fills the moment the agent pushes the plan, then recipe, cook mode, and grocery check-off"></p>
+
 ## Quick start (self-hosting)
 
 All you need is Docker. Images are published to GHCR for **amd64 and arm64** (Raspberry Pi 4/5 and other ARM boards work).
@@ -128,6 +132,8 @@ The repo ships a ready-made agent skill: [`skills/weekly-meal-planning/SKILL.md`
 Tool inputs are deliberately forgiving (string numbers, fraction quantities like `"1/2"`, double-wrapped arrays all get coerced), and validation errors name the exact fields and include a valid example — so models can self-correct instead of failing.
 
 ## Development
+
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks, and conventions.
 
 Requirements: Node 22 and pnpm (`corepack enable` gets you pnpm). It's an Nx monorepo: `apps/api` (Hono + tRPC + Drizzle + SQLite, serves the MCP endpoint and the built web app), `apps/web` (React + Vite + TanStack Router + Tailwind).
 
