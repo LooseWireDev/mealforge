@@ -1,8 +1,7 @@
 import type { PushMealPlanInput, RecipeInput } from '@mealforge/shared/schemas';
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createDb, type Db } from '../../db/client';
+import { createDb, type Db, migrateDb } from '../../db/client';
 import { addManualItem, itemsForPlan, setChecked } from '../grocery/service';
 import { getRecipe, listRecipes, toggleFavorite } from '../recipes/service';
 import {
@@ -18,7 +17,7 @@ import {
 
 function testDb(): Db {
   const db = createDb(':memory:');
-  migrate(db, { migrationsFolder: new URL('../../db/migrations', import.meta.url).pathname });
+  migrateDb(db, new URL('../../db/migrations', import.meta.url).pathname);
   return db;
 }
 

@@ -1,9 +1,8 @@
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import type { Hono } from 'hono';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../app';
-import { createDb, type Db } from '../db/client';
+import { createDb, type Db, migrateDb } from '../db/client';
 
 const MCP_HEADERS = {
   'content-type': 'application/json',
@@ -106,7 +105,7 @@ describe('MCP endpoint', () => {
 
   beforeEach(async () => {
     db = createDb(':memory:');
-    migrate(db, { migrationsFolder: new URL('../db/migrations', import.meta.url).pathname });
+    migrateDb(db, new URL('../db/migrations', import.meta.url).pathname);
     app = buildApp(db);
     await rpc(app, 'initialize', {
       protocolVersion: '2025-06-18',
