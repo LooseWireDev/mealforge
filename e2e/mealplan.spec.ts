@@ -2,14 +2,8 @@ import { expect, test } from '@playwright/test';
 
 const BASE = 'http://localhost:3010';
 
-function weekStart(weeksFromNow = 0): string {
-  const monday = new Date();
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7) + weeksFromNow * 7);
-  const y = monday.getFullYear();
-  const m = String(monday.getMonth() + 1).padStart(2, '0');
-  const d = String(monday.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
+// Tests in this file are order-dependent (they walk a plan through its
+// lifecycle); playwright.config.ts runs them serially with one worker.
 
 async function mcpCall(method: string, params: unknown, id: number): Promise<void> {
   const res = await fetch(`${BASE}/mcp`, {
@@ -27,15 +21,14 @@ async function mcpCall(method: string, params: unknown, id: number): Promise<voi
 }
 
 test.beforeAll(async () => {
+  // First push lands as the active plan (empty database).
   await mcpCall(
     'tools/call',
     {
       name: 'push_meal_plan',
       arguments: {
-        weekStart: weekStart(),
         meals: [
           {
-            dayOfWeek: 0,
             mealType: 'dinner',
             recipe: {
               title: 'E2E Roast Chicken',
@@ -52,19 +45,18 @@ test.beforeAll(async () => {
             },
           },
           {
-            dayOfWeek: 2,
-            mealType: 'dinner',
+            mealType: 'breakfast',
             recipe: {
-              title: 'E2E Salmon',
-              description: 'Fish, but automated.',
-              servings: 4,
-              prepMinutes: 10,
-              cookMinutes: 20,
+              title: 'E2E Overnight Oats',
+              description: 'Breakfast, but automated.',
+              servings: 2,
+              prepMinutes: 5,
+              cookMinutes: null,
               tags: ['e2e'],
-              stepsMarkdown: '1. Sear the salmon.\n2. Plate it.',
+              stepsMarkdown: '1. Stir oats and milk.\n2. Chill overnight.',
               ingredients: [
-                { name: 'salmon fillets', quantity: 1.5, unit: 'lb', section: 'meat-seafood' },
-                { name: 'lemon', quantity: 1, unit: null, section: 'produce' },
+                { name: 'rolled oats', quantity: 2, unit: 'cup', section: 'pantry' },
+                { name: 'milk', quantity: 1.5, unit: 'cup', section: 'dairy-eggs' },
               ],
             },
           },
@@ -73,18 +65,18 @@ test.beforeAll(async () => {
     },
     1,
   );
+  // Second push queues as upcoming.
   await mcpCall(
     'tools/call',
     {
       name: 'push_meal_plan',
       arguments: {
-        weekStart: weekStart(1),
+        name: 'E2E Taco Week',
         meals: [
           {
-            dayOfWeek: 4,
             mealType: 'dinner',
             recipe: {
-              title: 'E2E Next-Week Tacos',
+              title: 'E2E Tacos',
               description: 'Planned ahead, like a real household.',
               servings: 4,
               prepMinutes: 10,
@@ -104,29 +96,20 @@ test.beforeAll(async () => {
   );
 });
 
-test('week view shows the pushed plan', async ({ page }) => {
+test('active plan shows meals grouped by meal type', async ({ page }) => {
   await page.goto('/');
+  // "/" redirects to the plans section, which defaults to the active plan
+  await expect(page).toHaveURL(/\/plans/);
+  await expect(page.getByRole('heading', { name: 'Breakfast' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dinner' })).toBeVisible();
   await expect(page.getByText('E2E Roast Chicken')).toBeVisible();
-  await expect(page.getByText('E2E Salmon')).toBeVisible();
-  await expect(page.getByText('Mon', { exact: true })).toBeVisible();
-  await expect(page.getByText('Wed', { exact: true })).toBeVisible();
-});
-
-test('week selector switches between planned weeks', async ({ page }) => {
-  await page.goto('/');
-  // Current week is the default when it has a plan.
-  await expect(page.getByText('E2E Roast Chicken')).toBeVisible();
-
-  await page.getByLabel('Choose a week').selectOption(weekStart(1));
-  await expect(page.getByText('E2E Next-Week Tacos')).toBeVisible();
-  await expect(page.getByText('E2E Roast Chicken')).not.toBeVisible();
-
-  await page.getByLabel('Choose a week').selectOption(weekStart());
-  await expect(page.getByText('E2E Roast Chicken')).toBeVisible();
+  await expect(page.getByText('E2E Overnight Oats')).toBeVisible();
+  // the unnamed first plan gets a default display name
+  await expect(page.getByText('Meal Plan 1')).toBeVisible();
 });
 
 test('recipe detail and cook mode', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/plans');
   await page.getByText('E2E Roast Chicken').click();
   await page.getByText('Open recipe').click();
 
@@ -146,8 +129,9 @@ test('recipe detail and cook mode', async ({ page }) => {
   await expect(page.getByText('Start cooking')).toBeVisible();
 });
 
-test('grocery check-off persists across reload', async ({ page }) => {
+test('grocery list builds from the active plan and check-off persists', async ({ page }) => {
   await page.goto('/grocery');
+  await expect(page.getByText('Meal Plan 1')).toBeVisible();
   await expect(page.getByText('carrots')).toBeVisible();
 
   await page.getByRole('button', { name: /carrots/ }).click();
@@ -169,14 +153,75 @@ test('manual grocery item can be added and removed', async ({ page }) => {
   await expect(page.getByText('paper towels')).not.toBeVisible();
 });
 
+test('upcoming tab lists queued plans as cards that open a detail page', async ({ page }) => {
+  await page.goto('/plans/upcoming');
+  await expect(page.getByText('E2E Taco Week')).toBeVisible();
+  await expect(page.getByText('E2E Tacos')).toBeVisible();
+
+  await page.getByLabel('Open E2E Taco Week').click();
+  await expect(page.getByText('E2E Taco Week')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Make this the active plan' })).toBeVisible();
+});
+
+test('activating is blocked while another plan is active', async ({ page }) => {
+  await page.goto('/plans/upcoming');
+  await page.getByLabel('Open E2E Taco Week').click();
+  await page.getByRole('button', { name: 'Make this the active plan' }).click();
+  await expect(page.getByRole('alert')).toContainText('already active');
+});
+
+test('favoriting a plan requires a name; naming unlocks it', async ({ page }) => {
+  await page.goto('/plans');
+  await page.getByLabel('Save plan to favorites').click();
+  await expect(page.getByRole('alert')).toContainText('Name this plan');
+
+  await page.getByLabel('Plan name').fill('E2E Chicken Week');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('E2E Chicken Week')).toBeVisible();
+
+  await page.getByLabel('Save plan to favorites').click();
+  await expect(page.getByLabel('Remove plan from favorites')).toBeVisible();
+
+  await page.goto('/plans/favorites');
+  await expect(page.getByText('E2E Chicken Week')).toBeVisible();
+});
+
+test('completing the active plan frees the slot for an upcoming one', async ({ page }) => {
+  await page.goto('/plans');
+  await page.getByRole('button', { name: 'Complete this plan' }).click();
+
+  await expect(page.getByText('No active meal plan')).toBeVisible();
+  await expect(page.getByText('E2E Taco Week')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Set active' }).click();
+  await expect(page.getByRole('button', { name: 'Complete this plan' })).toBeVisible();
+  await expect(page.getByText('E2E Tacos')).toBeVisible();
+
+  await page.goto('/plans/completed');
+  await expect(page.getByText('E2E Chicken Week')).toBeVisible();
+});
+
 test('favoriting a recipe shows it in favorites', async ({ page }) => {
   await page.goto('/recipes');
   await expect(page.getByText('No favorites yet')).toBeVisible();
 
   await page.getByRole('tab', { name: 'History' }).click();
-  await expect(page.getByText('E2E Salmon')).toBeVisible();
-  await page.locator('article', { hasText: 'E2E Salmon' }).getByLabel('Save to favorites').click();
+  await expect(page.getByText('E2E Overnight Oats')).toBeVisible();
+  await page
+    .locator('article', { hasText: 'E2E Overnight Oats' })
+    .getByLabel('Save to favorites')
+    .click();
 
   await page.getByRole('tab', { name: /Favorites/ }).click();
-  await expect(page.getByText('E2E Salmon')).toBeVisible();
+  await expect(page.getByText('E2E Overnight Oats')).toBeVisible();
+});
+
+test('recipes can be filtered by meal type', async ({ page }) => {
+  await page.goto('/recipes');
+  await page.getByRole('tab', { name: 'History' }).click();
+  await expect(page.getByText('E2E Roast Chicken')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Breakfast' }).click();
+  await expect(page.getByText('E2E Overnight Oats')).toBeVisible();
+  await expect(page.getByText('E2E Roast Chicken')).not.toBeVisible();
 });

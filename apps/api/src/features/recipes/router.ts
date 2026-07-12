@@ -1,3 +1,4 @@
+import { mealTypeSchema } from '@mealforge/shared/schemas';
 import { z } from 'zod';
 
 import { publicProcedure, router } from '../../trpcInit';
@@ -10,6 +11,7 @@ export const recipesRouter = router({
         .object({
           query: z.string().optional(),
           favoritesOnly: z.boolean().default(false),
+          mealType: mealTypeSchema.optional(),
           limit: z.number().int().min(1).max(200).default(50),
         })
         .default({ favoritesOnly: false, limit: 50 }),

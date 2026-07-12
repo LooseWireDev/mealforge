@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { sectionSchema } from './grocery';
+import { mealTypeSchema } from './mealTypes';
 
 // An ingredient as authored by the agent. quantity: null means "to taste";
 // unit: null means a bare count ("2 eggs").
@@ -21,6 +22,9 @@ export const recipeInputSchema = z.object({
   prepMinutes: z.number().int().nonnegative().nullable(),
   cookMinutes: z.number().int().nonnegative().nullable(),
   tags: z.array(z.string()).default([]),
+  // Which meal slots this recipe suits (a frittata can be breakfast or lunch).
+  // Also grown automatically from the meal types it gets planned as.
+  mealTypes: z.array(mealTypeSchema).default([]),
   stepsMarkdown: z.string().min(1),
   ingredients: z.array(ingredientInputSchema).min(1),
 });

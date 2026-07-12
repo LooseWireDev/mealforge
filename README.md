@@ -3,11 +3,11 @@
 [![Build and publish Docker image](https://github.com/LooseWireDev/mealforge/actions/workflows/release.yml/badge.svg)](https://github.com/LooseWireDev/mealforge/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**AI-planned weekly meals, in a real app.** Plan your week conversationally with any MCP-capable AI chat (LibreChat, Claude, and friends) — the model pushes the finished plan here, where it becomes recipe cards, a step-by-step cook mode, and a grocery list you check off in the store.
+**AI-planned meals, in a real app.** Plan conversationally with any MCP-capable AI chat (LibreChat, Claude, and friends) — the model pushes the finished plan here, where it becomes recipe cards, a step-by-step cook mode, and a grocery list you check off in the store. A plan is whatever you need it to be: a week of dinners, a few breakfasts, or one big Sunday cook — each meal tagged breakfast, lunch, dinner, or snack.
 
-Meal-planning apps limit you to their recipe catalog. mealforge has **no catalog**: every recipe is generated in conversation, tailored to your household, constraints, and whatever sounds good this week. The app is the structured, shoppable, cookable home for what you and the model decide together.
+Meal-planning apps limit you to their recipe catalog. mealforge has **no catalog**: every recipe is generated in conversation, tailored to your household, constraints, and whatever sounds good right now. The app is the structured, shoppable, cookable home for what you and the model decide together.
 
-![Weekly plan view](docs/screenshots/week.png)
+![Meal plan view](docs/screenshots/week.png)
 
 | Grocery list, grouped by store section | Recipe with cook mode |
 |:---:|:---:|
@@ -16,21 +16,23 @@ Meal-planning apps limit you to their recipe catalog. mealforge has **no catalog
 ## How it works
 
 ```
-┌────────────┐  MCP (streamable http)  ┌────────────────────────────┐
-│ your AI    │ ───────────────────────▶│ mealforge                  │
-│ chat       │  push_meal_plan          │  • weekly plan view        │
-│ (LibreChat,│  search_recipes          │  • recipes + cook mode     │
-│  Claude,   │  list_favorites …        │  • grocery list (derived)  │
-│  etc.)     │                          │  • favorites + history     │
-└────────────┘                          └────────────────────────────┘
+┌────────────┐  MCP (streamable http)  ┌─────────────────────────────┐
+│ your AI    │ ───────────────────────▶│ mealforge                   │
+│ chat       │  push_meal_plan          │  • active / upcoming /      │
+│ (LibreChat,│  activate_meal_plan      │    completed meal plans     │
+│  Claude,   │  search_recipes          │  • recipes + cook mode      │
+│  etc.)     │  list_favorites …        │  • grocery list (derived)   │
+└────────────┘                          │  • favorites + history      │
+                                        └─────────────────────────────┘
 ```
 
-1. **Plan in chat.** "Lots of crock pot this week, salmon once, use the pork shoulder in the freezer." Iterate until it's right.
-2. **The model pushes the final plan** (`push_meal_plan`): structured recipes — ingredients with quantities, units, and store sections — plus markdown cooking steps.
-3. **mealforge derives the grocery list** automatically: ingredients aggregated across recipes ("2 cups" + "1 cup" → "3 cups"), grouped by store section, checkable while you shop.
-4. **Favorite what you loved.** The model can recall favorites and past recipes next week ("give me one of my favorites") and avoids repeating recent meals.
+1. **Plan in chat.** "Lots of crock pot this week, salmon once, use the pork shoulder in the freezer" — or "just three breakfasts for the long weekend." Iterate until it's right.
+2. **The model pushes the final plan** (`push_meal_plan`): 1+ meals typed breakfast/lunch/dinner/snack, built from structured recipes — ingredients with quantities, units, and store sections — plus markdown cooking steps.
+3. **One plan is active at a time.** New plans queue as *upcoming*; promote one when you're ready, and complete it when you've cooked through it. Completed plans become browsable history, and named plans can be favorited to cook again later.
+4. **mealforge derives the grocery list** automatically from the active plan: ingredients aggregated across recipes ("2 cups" + "1 cup" → "3 cups"), grouped by store section, checkable while you shop.
+5. **Favorite what you loved.** The model can recall favorite recipes *and* favorite plans ("run back taco week") and avoids repeating recent meals.
 
-Here's the moment the plan lands, end to end — empty week, MCP push, recipe, cook mode, grocery run:
+Here's the moment the plan lands, end to end — empty app, MCP push, recipe, cook mode, grocery run:
 
 <p align="center"><img src="docs/demo.gif" width="390" alt="Demo: an empty week fills the moment the agent pushes the plan, then recipe, cook mode, and grocery check-off"></p>
 
@@ -63,7 +65,7 @@ One variable matters: set `APP_URL` (in the compose file or a `.env` next to it)
 bash <(curl -fsSL https://raw.githubusercontent.com/loosewiredev/mealforge/main/scripts/verify-mcp.sh) http://<host>:8090
 ```
 
-This smoke-tests the MCP endpoint end-to-end: initialize, list tools, push a test plan for *next* week (it never touches your current week), and read it back. Re-push next week with a real plan or ignore the test entry.
+This smoke-tests the MCP endpoint end-to-end: initialize, list tools, push a test plan, read it back, and mark it completed so it never becomes your active plan. The completed "Verify Script Test Plan" entry in your history is safe to ignore.
 
 ### Updating
 
@@ -111,9 +113,9 @@ Settings → Connectors → **Add custom connector** → paste `http://<host>:80
 
 ## Teach your agent to meal-plan (recommended)
 
-The repo ships a ready-made agent skill: [`skills/weekly-meal-planning/SKILL.md`](skills/weekly-meal-planning/SKILL.md). It teaches an agent the whole workflow: gather history first, draft the week in conversation, publish only on explicit command via the reliable two-step flow (`create_recipe` per recipe, then one `push_meal_plan` with recipeIds), keep ingredient data grocery-list-clean, and recover from validation errors. Strongly recommended — especially with smaller models.
+The repo ships a ready-made agent skill: [`skills/meal-planning/SKILL.md`](skills/meal-planning/SKILL.md). It teaches an agent the whole workflow: gather history first, draft the plan in conversation, publish only on explicit command via the reliable two-step flow (`create_recipe` per recipe, then one `push_meal_plan` with recipeIds), manage the active/upcoming/completed lifecycle on command, keep ingredient data grocery-list-clean, and recover from validation errors. Strongly recommended — especially with smaller models.
 
-- **Claude Code / Agent Skills**: copy the `skills/weekly-meal-planning/` directory into your skills folder (e.g. `~/.claude/skills/`).
+- **Claude Code / Agent Skills**: copy the `skills/meal-planning/` directory into your skills folder (e.g. `~/.claude/skills/`).
 - **LibreChat**: paste the body of `SKILL.md` into your meal-planning agent's instructions (or attach it as an agent skill/file).
 - **Anything else**: it's plain markdown — hand it to your agent however that client takes instructions.
 
@@ -122,12 +124,15 @@ The repo ships a ready-made agent skill: [`skills/weekly-meal-planning/SKILL.md`
 | Tool | Purpose |
 |---|---|
 | `create_recipe` | Save one recipe (flat payload) and get back a `recipeId` — the reliable first step before `push_meal_plan`. |
-| `push_meal_plan` | Push a finalized week (new recipes and/or `recipeId` reuses). Re-pushing the same `weekStart` revises the week; checked-off grocery items that didn't change stay checked. |
-| `get_recent_meal_plans` | Recent weeks with meal titles — for repeat-avoidance. |
-| `get_meal_plan_for_week` | The plan for a specific week, if any. |
+| `push_meal_plan` | Push a finalized plan of 1+ typed meals (new recipes and/or `recipeId` reuses). Becomes active if nothing is, else upcoming. Pass `planId` to revise a plan; checked-off grocery items that didn't change stay checked. |
+| `list_meal_plans` | Plans with status, names, and meal titles — filter by status or favorites. For repeat-avoidance and recalling favorite plans. |
+| `get_meal_plan` | One plan by `planId`. |
+| `get_active_meal_plan` | The plan the household is cooking from right now, if any. |
+| `activate_meal_plan` | Promote an upcoming (or completed) plan to active — fails while another plan is active. |
+| `complete_meal_plan` | Mark a plan (default: the active one) as cooked through. |
 | `list_favorites` | Recipes the household has favorited in the UI. |
 | `search_recipes` | Search past recipes by title, tag, or ingredient. |
-| `get_recipe` | Full recipe (ingredients + steps) by id. |
+| `get_recipe` | Full recipe (ingredients + steps + meal types) by id. |
 
 Tool inputs are deliberately forgiving (string numbers, fraction quantities like `"1/2"`, double-wrapped arrays all get coerced), and validation errors name the exact fields and include a valid example — so models can self-correct instead of failing.
 

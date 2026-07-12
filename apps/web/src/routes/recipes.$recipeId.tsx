@@ -1,4 +1,10 @@
-import { SECTION_LABELS, STORE_SECTIONS, type StoreSection } from '@mealforge/shared/schemas';
+import {
+  MEAL_TYPE_LABELS,
+  type MealType,
+  SECTION_LABELS,
+  STORE_SECTIONS,
+  type StoreSection,
+} from '@mealforge/shared/schemas';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 
@@ -62,6 +68,18 @@ function RecipeDetailPage(): React.ReactElement {
             {recipe.prepMinutes !== null && <span>prep {recipe.prepMinutes}m</span>}
             {recipe.cookMinutes !== null && <span>cook {recipe.cookMinutes}m</span>}
           </p>
+          {recipe.mealTypes.length > 0 && (
+            <p className="mt-1.5 flex flex-wrap gap-1.5">
+              {recipe.mealTypes.map((type) => (
+                <span
+                  key={type}
+                  className="rounded-full border border-line bg-card px-2 py-0.5 text-[0.65rem] font-semibold text-ink-soft"
+                >
+                  {MEAL_TYPE_LABELS[type as MealType] ?? type}
+                </span>
+              ))}
+            </p>
+          )}
         </div>
         <FavoriteButton recipeId={recipe.id} isFavorite={recipe.isFavorite} />
       </header>
@@ -123,10 +141,10 @@ function RecipeDetailPage(): React.ReactElement {
         />
       </section>
 
-      {recipe.usedInWeeks.length > 0 && (
+      {recipe.usedInPlans.length > 0 && (
         <p className="pb-2 text-center font-quant text-xs text-check">
-          cooked {recipe.usedInWeeks.length === 1 ? 'once' : `${recipe.usedInWeeks.length}×`} · last
-          week of {recipe.usedInWeeks[0]}
+          cooked {recipe.usedInPlans.length === 1 ? 'once' : `${recipe.usedInPlans.length}×`} · last
+          in {recipe.usedInPlans[0]?.displayName}
         </p>
       )}
     </div>

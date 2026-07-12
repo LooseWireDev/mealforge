@@ -1,4 +1,5 @@
-import { integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { integer, real, sqliteTable, text, unique, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const recipes = sqliteTable('recipes', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -8,6 +9,9 @@ export const recipes = sqliteTable('recipes', {
   prepMinutes: integer('prep_minutes'),
   cookMinutes: integer('cook_minutes'),
   tags: text('tags', { mode: 'json' }).$type<string[]>().notNull().default([]),
+  // which meal slots the recipe suits ('breakfast' | 'lunch' | 'dinner' |
+  // 'snack'); grown automatically from the meal types it gets planned as
+  mealTypes: text('meal_types', { mode: 'json' }).$type<string[]>().notNull().default([]),
   stepsMarkdown: text('steps_markdown').notNull(),
   isFavorite: integer('is_favorite', { mode: 'boolean' }).notNull().default(false),
   // 'agent' = pushed over MCP, 'manual' = created in the app UI
@@ -33,35 +37,43 @@ export const recipeIngredients = sqliteTable('recipe_ingredients', {
   sortOrder: integer('sort_order').notNull().default(0),
 });
 
-export const mealPlans = sqliteTable('meal_plans', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  // ISO date (YYYY-MM-DD) of the week's Monday; one plan per week
-  weekStart: text('week_start').notNull().unique(),
-  status: text('status').notNull().default('active'),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
-
-export const meals = sqliteTable(
-  'meals',
+export const mealPlans = sqliteTable(
+  'meal_plans',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    planId: integer('plan_id')
+    // null = unnamed; the app shows "Meal Plan {id}". A name is required to
+    // favorite a plan.
+    name: text('name'),
+    // 'upcoming' | 'active' | 'completed'
+    status: text('status').notNull().default('upcoming'),
+    isFavorite: integer('is_favorite', { mode: 'boolean' }).notNull().default(false),
+    completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' })
       .notNull()
-      .references(() => mealPlans.id, { onDelete: 'cascade' }),
-    recipeId: integer('recipe_id')
+      .$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
       .notNull()
-      .references(() => recipes.id),
-    // 0 = Monday … 6 = Sunday
-    dayOfWeek: integer('day_of_week').notNull(),
-    mealType: text('meal_type').notNull().default('dinner'),
+      .$defaultFn(() => new Date()),
   },
-  (t) => [unique().on(t.planId, t.dayOfWeek, t.mealType)],
+  (t) => [
+    // the household cooks from exactly one plan at a time
+    uniqueIndex('meal_plans_one_active').on(t.status).where(sql`${t.status} = 'active'`),
+  ],
 );
+
+export const meals = sqliteTable('meals', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  planId: integer('plan_id')
+    .notNull()
+    .references(() => mealPlans.id, { onDelete: 'cascade' }),
+  recipeId: integer('recipe_id')
+    .notNull()
+    .references(() => recipes.id),
+  // 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  mealType: text('meal_type').notNull().default('dinner'),
+  // display order within the plan (the UI groups by meal_type first)
+  sortOrder: integer('sort_order').notNull().default(0),
+});
 
 export const groceryItems = sqliteTable(
   'grocery_items',

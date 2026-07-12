@@ -1,3 +1,4 @@
+import { MEAL_TYPE_LABELS, MEAL_TYPES, type MealType } from '@mealforge/shared/schemas';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
@@ -21,11 +22,13 @@ function useDebounced(value: string, ms: number): string {
 function RecipesPage(): React.ReactElement {
   const [tab, setTab] = useState<'favorites' | 'history'>('favorites');
   const [query, setQuery] = useState('');
+  const [mealType, setMealType] = useState<MealType | undefined>(undefined);
   const debouncedQuery = useDebounced(query, 250);
 
   const { data: recipes, isLoading } = trpc.recipes.list.useQuery({
     favoritesOnly: tab === 'favorites',
     ...(debouncedQuery.trim().length > 0 ? { query: debouncedQuery.trim() } : {}),
+    ...(mealType !== undefined ? { mealType } : {}),
     limit: 100,
   });
 
@@ -64,6 +67,37 @@ function RecipesPage(): React.ReactElement {
         ))}
       </div>
 
+      <fieldset className="flex flex-wrap gap-1.5">
+        <legend className="sr-only">Filter by meal type</legend>
+        <button
+          type="button"
+          aria-pressed={mealType === undefined}
+          onClick={() => setMealType(undefined)}
+          className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            mealType === undefined
+              ? 'border-leaf bg-leaf text-paper'
+              : 'border-line bg-card text-ink-soft'
+          }`}
+        >
+          All
+        </button>
+        {MEAL_TYPES.map((type) => (
+          <button
+            key={type}
+            type="button"
+            aria-pressed={mealType === type}
+            onClick={() => setMealType(mealType === type ? undefined : type)}
+            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              mealType === type
+                ? 'border-leaf bg-leaf text-paper'
+                : 'border-line bg-card text-ink-soft'
+            }`}
+          >
+            {MEAL_TYPE_LABELS[type]}
+          </button>
+        ))}
+      </fieldset>
+
       {isLoading ? (
         <p className="p-8 text-center text-sm text-ink-soft">Loading…</p>
       ) : !recipes || recipes.length === 0 ? (
@@ -77,13 +111,13 @@ function RecipesPage(): React.ReactElement {
           <EmptyState
             glyph="the keepers"
             title="No favorites yet"
-            hint="Tap the star on any recipe you'd cook again. Favorites stay forever, and your assistant can bring them back next week."
+            hint="Tap the star on any recipe you'd cook again. Favorites stay forever, and your assistant can bring them back any time."
           />
         ) : (
           <EmptyState
             glyph="a blank page"
             title="No recipes yet"
-            hint="Every recipe from your weekly plans collects here automatically."
+            hint="Every recipe from your meal plans collects here automatically."
           />
         )
       ) : (

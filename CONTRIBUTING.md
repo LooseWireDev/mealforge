@@ -50,7 +50,7 @@ The full conventions live in [`AGENTS.md`](AGENTS.md) (they apply to humans too)
 The MCP tools are the public API that people's agents depend on. If you change a tool's schema or behavior:
 
 - keep inputs permissive (coerce, don't reject) and errors self-correcting — a validation error must name the exact fields and include a valid example, so models can fix their own calls;
-- update the tool table in `README.md` and, if the workflow changes, `skills/weekly-meal-planning/SKILL.md`;
+- update the tool table in `README.md` and, if the workflow changes, `skills/meal-planning/SKILL.md`;
 - run `scripts/verify-mcp.sh` against your dev server.
 
 ## Reporting bugs

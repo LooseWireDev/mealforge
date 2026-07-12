@@ -1,4 +1,5 @@
-import type { RecipeInput } from '@mealforge/shared/schemas';
+import type { MealType, RecipeInput } from '@mealforge/shared/schemas';
+import { planDisplayName } from '@mealforge/shared/utils';
 import { and, desc, eq, inArray, like, or } from 'drizzle-orm';
 
 import type { Db } from '../../db/client';
@@ -12,8 +13,15 @@ export interface RecipeSummary {
   prepMinutes: number | null;
   cookMinutes: number | null;
   tags: string[];
+  mealTypes: string[];
   isFavorite: boolean;
   createdAt: Date;
+}
+
+export interface RecipePlanUse {
+  planId: number;
+  name: string | null;
+  displayName: string;
 }
 
 export interface RecipeIngredientRow {
@@ -28,7 +36,7 @@ export interface RecipeIngredientRow {
 export interface RecipeDetail extends RecipeSummary {
   stepsMarkdown: string;
   ingredients: RecipeIngredientRow[];
-  usedInWeeks: string[];
+  usedInPlans: RecipePlanUse[];
 }
 
 function toSummary(row: typeof recipes.$inferSelect): RecipeSummary {
@@ -40,6 +48,7 @@ function toSummary(row: typeof recipes.$inferSelect): RecipeSummary {
     prepMinutes: row.prepMinutes,
     cookMinutes: row.cookMinutes,
     tags: row.tags,
+    mealTypes: row.mealTypes,
     isFavorite: row.isFavorite,
     createdAt: row.createdAt,
   };
@@ -50,6 +59,7 @@ export function listRecipes(
   options: {
     query?: string | undefined;
     favoritesOnly?: boolean | undefined;
+    mealType?: MealType | undefined;
     limit?: number | undefined;
   } = {},
 ): RecipeSummary[] {
@@ -77,6 +87,8 @@ export function listRecipes(
 
   const conditions = [
     ...(options.favoritesOnly ? [eq(recipes.isFavorite, true)] : []),
+    // meal_types is a JSON string array, so a quoted-substring match is exact
+    ...(options.mealType !== undefined ? [like(recipes.mealTypes, `%"${options.mealType}"%`)] : []),
     ...(matchingIds !== null ? [inArray(recipes.id, matchingIds)] : []),
   ];
 
@@ -101,6 +113,7 @@ export function createRecipe(db: Db, input: RecipeInput): RecipeSummary {
         prepMinutes: input.prepMinutes,
         cookMinutes: input.cookMinutes,
         tags: input.tags,
+        mealTypes: input.mealTypes,
         stepsMarkdown: input.stepsMarkdown,
         source: 'agent',
       })
@@ -138,15 +151,15 @@ export function getRecipe(db: Db, id: number): RecipeDetail | null {
     .where(eq(recipeIngredients.recipeId, id))
     .orderBy(recipeIngredients.sortOrder)
     .all();
-  const usedInWeeks = db
-    .select({ weekStart: mealPlans.weekStart })
+  const usedInPlans = db
+    .selectDistinct({ planId: mealPlans.id, name: mealPlans.name })
     .from(meals)
     .innerJoin(mealPlans, eq(meals.planId, mealPlans.id))
     .where(eq(meals.recipeId, id))
-    .orderBy(desc(mealPlans.weekStart))
+    .orderBy(desc(mealPlans.createdAt), desc(mealPlans.id))
     .all()
-    .map((r) => r.weekStart);
-  return { ...toSummary(recipe), stepsMarkdown: recipe.stepsMarkdown, ingredients, usedInWeeks };
+    .map((r) => ({ ...r, displayName: planDisplayName(r.name, r.planId) }));
+  return { ...toSummary(recipe), stepsMarkdown: recipe.stepsMarkdown, ingredients, usedInPlans };
 }
 
 export function toggleFavorite(db: Db, id: number): RecipeSummary {

@@ -17,7 +17,7 @@ body:
         - Web app (plan view, recipes, cook mode, grocery list)
         - MCP endpoint / tools
         - Docker / self-hosting
-        - Agent skill (skills/weekly-meal-planning)
+        - Agent skill (skills/meal-planning)
         - Other
     validations:
       required: true

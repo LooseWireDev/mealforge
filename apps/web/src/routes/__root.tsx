@@ -6,8 +6,8 @@ export const Route = createRootRoute({
 
 const TABS = [
   {
-    to: '/',
-    label: 'This Week',
+    to: '/plans',
+    label: 'Plans',
     icon: (
       <svg
         viewBox="0 0 24 24"
@@ -75,7 +75,6 @@ function RootLayout(): React.ReactElement {
               to={tab.to}
               className="flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[0.7rem] font-medium text-ink-soft"
               activeProps={{ className: 'text-leaf-deep' }}
-              activeOptions={{ exact: tab.to === '/' }}
             >
               {tab.icon}
               {tab.label}

@@ -1,51 +1,92 @@
-import type { PushMealPlanInput, StoreSection } from '@mealforge/shared/schemas';
-import { and, asc, desc, eq, gte, inArray, lt, notInArray } from 'drizzle-orm';
+import type {
+  MealType,
+  PlanStatus,
+  PushMealPlanInput,
+  StoreSection,
+} from '@mealforge/shared/schemas';
+import { planDisplayName } from '@mealforge/shared/utils';
+import { and, asc, desc, eq, inArray, notInArray } from 'drizzle-orm';
 
 import type { Db } from '../../db/client';
 import { groceryItems, mealPlans, meals, recipeIngredients, recipes } from '../../db/schema';
 import { aggregateIngredients } from '../grocery/aggregate';
 
-export interface PushedMeal {
-  dayOfWeek: number;
-  mealType: string;
+export interface PlanMeal {
+  mealType: MealType;
   recipeId: number;
   title: string;
 }
 
-export interface PushMealPlanResult {
+export interface PlanSummary {
   planId: number;
-  weekStart: string;
+  name: string | null;
+  displayName: string;
+  status: PlanStatus;
+  isFavorite: boolean;
+  createdAt: Date;
+  completedAt: Date | null;
+  meals: PlanMeal[];
+}
+
+export interface PushMealPlanResult extends PlanSummary {
   created: boolean;
-  meals: PushedMeal[];
   groceryItemCount: number;
 }
 
-export interface PlanSummary {
-  planId: number;
-  weekStart: string;
-  meals: PushedMeal[];
+type PlanRow = typeof mealPlans.$inferSelect;
+
+// Accepts either the db or a transaction handle so helpers work inside
+// db.transaction callbacks without casting.
+type Queryable = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
+
+function toSummary(plan: PlanRow, planMeals: PlanMeal[]): PlanSummary {
+  return {
+    planId: plan.id,
+    name: plan.name,
+    displayName: planDisplayName(plan.name, plan.id),
+    status: plan.status as PlanStatus,
+    isFavorite: plan.isFavorite,
+    createdAt: plan.createdAt,
+    completedAt: plan.completedAt,
+    meals: planMeals,
+  };
+}
+
+function getPlanRow(db: Queryable, planId: number): PlanRow {
+  const plan = db.select().from(mealPlans).where(eq(mealPlans.id, planId)).get();
+  if (!plan) {
+    throw new Error(`Meal plan ${planId} does not exist. Use list_meal_plans to find valid ids.`);
+  }
+  return plan;
 }
 
 export function pushMealPlan(db: Db, input: PushMealPlanInput): PushMealPlanResult {
-  for (const meal of input.meals) {
+  input.meals.forEach((meal, i) => {
     const hasRecipe = meal.recipe !== undefined;
     const hasRecipeId = meal.recipeId !== undefined;
     if (hasRecipe === hasRecipeId) {
       throw new Error(
-        `Meal for day ${meal.dayOfWeek}: provide exactly one of "recipe" (a full new recipe) or "recipeId" (a past recipe to reuse).`,
+        `Meal ${i + 1}: provide exactly one of "recipe" (a full new recipe) or "recipeId" (a past recipe to reuse).`,
       );
     }
-  }
+  });
 
   return db.transaction((tx) => {
-    const existing = tx
-      .select()
-      .from(mealPlans)
-      .where(eq(mealPlans.weekStart, input.weekStart))
-      .get();
-
-    const plan =
-      existing ?? tx.insert(mealPlans).values({ weekStart: input.weekStart }).returning().get();
+    let plan: PlanRow;
+    const created = input.planId === undefined;
+    if (input.planId !== undefined) {
+      plan = getPlanRow(tx, input.planId);
+    } else {
+      // The first plan of an empty kitchen goes straight to active; after
+      // that, new plans queue as upcoming until the household promotes them.
+      const activeExists =
+        tx.select().from(mealPlans).where(eq(mealPlans.status, 'active')).get() !== undefined;
+      plan = tx
+        .insert(mealPlans)
+        .values({ name: input.name ?? null, status: activeExists ? 'upcoming' : 'active' })
+        .returning()
+        .get();
+    }
 
     const oldMealRows = tx.select().from(meals).where(eq(meals.planId, plan.id)).all();
     const oldRecipeIds = [...new Set(oldMealRows.map((m) => m.recipeId))];
@@ -53,15 +94,15 @@ export function pushMealPlan(db: Db, input: PushMealPlanInput): PushMealPlanResu
       tx.delete(meals).where(eq(meals.planId, plan.id)).run();
     }
 
-    const pushedMeals: PushedMeal[] = [];
-    for (const meal of input.meals) {
+    const pushedMeals: PlanMeal[] = [];
+    input.meals.forEach((meal, i) => {
       let recipeId: number;
       let title: string;
       if (meal.recipeId !== undefined) {
         const recipe = tx.select().from(recipes).where(eq(recipes.id, meal.recipeId)).get();
         if (!recipe) {
           throw new Error(
-            `Meal for day ${meal.dayOfWeek}: recipeId ${meal.recipeId} does not exist. Use search_recipes or list_favorites to find valid ids.`,
+            `Meal ${i + 1}: recipeId ${meal.recipeId} does not exist. Use search_recipes or list_favorites to find valid ids.`,
           );
         }
         recipeId = recipe.id;
@@ -76,6 +117,7 @@ export function pushMealPlan(db: Db, input: PushMealPlanInput): PushMealPlanResu
             prepMinutes: meal.recipe.prepMinutes,
             cookMinutes: meal.recipe.cookMinutes,
             tags: meal.recipe.tags,
+            mealTypes: meal.recipe.mealTypes,
             stepsMarkdown: meal.recipe.stepsMarkdown,
             source: 'agent',
           })
@@ -83,13 +125,13 @@ export function pushMealPlan(db: Db, input: PushMealPlanInput): PushMealPlanResu
           .get();
         tx.insert(recipeIngredients)
           .values(
-            meal.recipe.ingredients.map((ingredient, i) => ({
+            meal.recipe.ingredients.map((ingredient, j) => ({
               recipeId: inserted.id,
               name: ingredient.name,
               quantity: ingredient.quantity,
               unit: ingredient.unit,
               section: ingredient.section,
-              sortOrder: i,
+              sortOrder: j,
             })),
           )
           .run();
@@ -99,14 +141,29 @@ export function pushMealPlan(db: Db, input: PushMealPlanInput): PushMealPlanResu
         throw new Error('unreachable');
       }
       tx.insert(meals)
-        .values({
-          planId: plan.id,
-          recipeId,
-          dayOfWeek: meal.dayOfWeek,
-          mealType: meal.mealType,
-        })
+        .values({ planId: plan.id, recipeId, mealType: meal.mealType, sortOrder: i })
         .run();
-      pushedMeals.push({ dayOfWeek: meal.dayOfWeek, mealType: meal.mealType, recipeId, title });
+      pushedMeals.push({ mealType: meal.mealType, recipeId, title });
+    });
+
+    // Planning a recipe as a meal type tags the recipe with it, so "one of
+    // our breakfasts" keeps working without anyone curating tags.
+    const typesByRecipe = new Map<number, Set<string>>();
+    for (const meal of pushedMeals) {
+      const set = typesByRecipe.get(meal.recipeId) ?? new Set();
+      set.add(meal.mealType);
+      typesByRecipe.set(meal.recipeId, set);
+    }
+    for (const [recipeId, types] of typesByRecipe) {
+      const recipe = tx.select().from(recipes).where(eq(recipes.id, recipeId)).get();
+      if (!recipe) continue;
+      const merged = [...new Set([...recipe.mealTypes, ...types])].sort();
+      if (merged.length !== recipe.mealTypes.length) {
+        tx.update(recipes)
+          .set({ mealTypes: merged, updatedAt: new Date() })
+          .where(eq(recipes.id, recipeId))
+          .run();
+      }
     }
 
     // Recipes orphaned by this re-push are deleted unless they're favorites
@@ -181,7 +238,15 @@ export function pushMealPlan(db: Db, input: PushMealPlanInput): PushMealPlanResu
     );
     tx.delete(groceryItems).where(staleFilter).run();
 
-    tx.update(mealPlans).set({ updatedAt: new Date() }).where(eq(mealPlans.id, plan.id)).run();
+    const updatedPlan = tx
+      .update(mealPlans)
+      .set({
+        updatedAt: new Date(),
+        ...(input.name !== undefined ? { name: input.name } : {}),
+      })
+      .where(eq(mealPlans.id, plan.id))
+      .returning()
+      .get() as PlanRow;
 
     const groceryItemCount = tx
       .select()
@@ -189,61 +254,126 @@ export function pushMealPlan(db: Db, input: PushMealPlanInput): PushMealPlanResu
       .where(eq(groceryItems.planId, plan.id))
       .all().length;
 
-    return {
-      planId: plan.id,
-      weekStart: input.weekStart,
-      created: existing === undefined,
-      meals: pushedMeals.sort((a, b) => a.dayOfWeek - b.dayOfWeek),
-      groceryItemCount,
-    };
+    return { ...toSummary(updatedPlan, pushedMeals), created, groceryItemCount };
   });
 }
 
-export function getPlanByWeek(db: Db, weekStart: string): PlanSummary | null {
-  const plan = db.select().from(mealPlans).where(eq(mealPlans.weekStart, weekStart)).get();
+export function getPlan(db: Db, planId: number): PlanSummary | null {
+  const plan = db.select().from(mealPlans).where(eq(mealPlans.id, planId)).get();
   if (!plan) return null;
-  return { planId: plan.id, weekStart: plan.weekStart, meals: mealsForPlan(db, plan.id) };
+  return toSummary(plan, mealsForPlan(db, plan.id));
+}
+
+/** The plan the household is cooking from right now, if any. */
+export function getActivePlan(db: Db): PlanSummary | null {
+  const plan = db.select().from(mealPlans).where(eq(mealPlans.status, 'active')).get();
+  if (!plan) return null;
+  return toSummary(plan, mealsForPlan(db, plan.id));
+}
+
+export function listPlans(
+  db: Db,
+  options: {
+    status?: PlanStatus | undefined;
+    favoritesOnly?: boolean | undefined;
+    limit?: number | undefined;
+  } = {},
+): PlanSummary[] {
+  const limit = options.limit ?? 20;
+  const conditions = [
+    ...(options.status !== undefined ? [eq(mealPlans.status, options.status)] : []),
+    ...(options.favoritesOnly ? [eq(mealPlans.isFavorite, true)] : []),
+  ];
+  // Upcoming plans queue oldest-first (next in line on top); completed plans
+  // read newest-first like history; mixed lists follow creation, newest first.
+  const order =
+    options.status === 'upcoming'
+      ? [asc(mealPlans.createdAt), asc(mealPlans.id)]
+      : options.status === 'completed'
+        ? [desc(mealPlans.completedAt), desc(mealPlans.id)]
+        : [desc(mealPlans.createdAt), desc(mealPlans.id)];
+  const plans = db
+    .select()
+    .from(mealPlans)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(...order)
+    .limit(limit)
+    .all();
+  return plans.map((plan) => toSummary(plan, mealsForPlan(db, plan.id)));
 }
 
 /**
- * The plan the household cares about right now: this week's if it exists,
- * otherwise the nearest upcoming one (plans are usually pushed for next
- * week before the current week rolls over), otherwise the most recent
- * past week — an old plan beats an empty screen.
+ * Promote an upcoming (or completed) plan to active. Fails while another
+ * plan is active — complete that one first, so "what are we cooking?"
+ * always has one answer.
  */
-export function getCurrentPlan(db: Db, fromWeekStart: string): PlanSummary | null {
-  const plan =
-    db
-      .select()
-      .from(mealPlans)
-      .where(gte(mealPlans.weekStart, fromWeekStart))
-      .orderBy(asc(mealPlans.weekStart))
-      .limit(1)
-      .get() ??
-    db
-      .select()
-      .from(mealPlans)
-      .where(lt(mealPlans.weekStart, fromWeekStart))
-      .orderBy(desc(mealPlans.weekStart))
-      .limit(1)
-      .get();
-  if (!plan) return null;
-  return { planId: plan.id, weekStart: plan.weekStart, meals: mealsForPlan(db, plan.id) };
+export function activatePlan(db: Db, planId: number): PlanSummary {
+  return db.transaction((tx) => {
+    const plan = getPlanRow(tx, planId);
+    if (plan.status === 'active') {
+      return toSummary(plan, mealsForPlan(tx, plan.id));
+    }
+    const active = tx.select().from(mealPlans).where(eq(mealPlans.status, 'active')).get();
+    if (active) {
+      throw new Error(
+        `"${planDisplayName(active.name, active.id)}" is already active. Complete it before activating another plan.`,
+      );
+    }
+    const updated = tx
+      .update(mealPlans)
+      .set({ status: 'active', completedAt: null, updatedAt: new Date() })
+      .where(eq(mealPlans.id, plan.id))
+      .returning()
+      .get() as PlanRow;
+    return toSummary(updated, mealsForPlan(tx, plan.id));
+  });
 }
 
-export function getRecentPlans(db: Db, limit: number): PlanSummary[] {
-  const plans = db.select().from(mealPlans).orderBy(desc(mealPlans.weekStart)).limit(limit).all();
-  return plans.map((plan) => ({
-    planId: plan.id,
-    weekStart: plan.weekStart,
-    meals: mealsForPlan(db, plan.id),
-  }));
+export function completePlan(db: Db, planId: number): PlanSummary {
+  const plan = getPlanRow(db, planId);
+  if (plan.status === 'completed') {
+    return toSummary(plan, mealsForPlan(db, plan.id));
+  }
+  const updated = db
+    .update(mealPlans)
+    .set({ status: 'completed', completedAt: new Date(), updatedAt: new Date() })
+    .where(eq(mealPlans.id, plan.id))
+    .returning()
+    .get() as PlanRow;
+  return toSummary(updated, mealsForPlan(db, plan.id));
 }
 
-function mealsForPlan(db: Db, planId: number): PushedMeal[] {
+export function renamePlan(db: Db, planId: number, name: string | null): PlanSummary {
+  const plan = getPlanRow(db, planId);
+  if (name === null && plan.isFavorite) {
+    throw new Error('A favorite plan needs a name. Remove it from favorites first.');
+  }
+  const updated = db
+    .update(mealPlans)
+    .set({ name, updatedAt: new Date() })
+    .where(eq(mealPlans.id, plan.id))
+    .returning()
+    .get() as PlanRow;
+  return toSummary(updated, mealsForPlan(db, plan.id));
+}
+
+export function togglePlanFavorite(db: Db, planId: number): PlanSummary {
+  const plan = getPlanRow(db, planId);
+  if (!plan.isFavorite && plan.name === null) {
+    throw new Error('Name this plan before favoriting it.');
+  }
+  const updated = db
+    .update(mealPlans)
+    .set({ isFavorite: !plan.isFavorite, updatedAt: new Date() })
+    .where(eq(mealPlans.id, plan.id))
+    .returning()
+    .get() as PlanRow;
+  return toSummary(updated, mealsForPlan(db, plan.id));
+}
+
+function mealsForPlan(db: Queryable, planId: number): PlanMeal[] {
   return db
     .select({
-      dayOfWeek: meals.dayOfWeek,
       mealType: meals.mealType,
       recipeId: meals.recipeId,
       title: recipes.title,
@@ -251,6 +381,7 @@ function mealsForPlan(db: Db, planId: number): PushedMeal[] {
     .from(meals)
     .innerJoin(recipes, eq(meals.recipeId, recipes.id))
     .where(eq(meals.planId, planId))
-    .orderBy(meals.dayOfWeek)
-    .all();
+    .orderBy(meals.sortOrder)
+    .all()
+    .map((row) => ({ ...row, mealType: row.mealType as MealType }));
 }

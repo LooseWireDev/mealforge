@@ -1,4 +1,5 @@
 import {
+  MEAL_TYPES,
   type PushMealPlanInput,
   pushMealPlanSchema,
   type RecipeInput,
@@ -70,6 +71,12 @@ const wireRecipe = z.looseObject({
   prepMinutes: wireNumber.optional(),
   cookMinutes: wireNumber.optional(),
   tags: tolerantArray(z.string()).nullable().optional(),
+  mealTypes: tolerantArray(z.string())
+    .nullable()
+    .optional()
+    .describe(
+      `Meal slots this recipe suits, each one of: ${MEAL_TYPES.join(', ')}. Optional — planning the recipe as a meal tags it automatically.`,
+    ),
   stepsMarkdown: z
     .string()
     .nullable()
@@ -84,8 +91,11 @@ const wireRecipe = z.looseObject({
 export const recipeWireShape = wireRecipe.shape;
 
 const wireMeal = z.looseObject({
-  dayOfWeek: wireNumber.optional().describe('0 = Monday … 6 = Sunday (required)'),
-  mealType: z.string().nullable().optional().describe('Defaults to "dinner"'),
+  mealType: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(`One of: ${MEAL_TYPES.join(', ')}. Defaults to "dinner".`),
   recipeId: wireNumber
     .optional()
     .describe('Reuse a saved recipe by id (from create_recipe, search_recipes, or list_favorites)'),
@@ -96,13 +106,22 @@ const wireMeal = z.looseObject({
 });
 
 export const pushWireShape = {
-  weekStart: z.string().describe("ISO date (YYYY-MM-DD) of the week's Monday"),
-  meals: tolerantArray(wireMeal).min(1),
+  planId: wireNumber
+    .optional()
+    .describe(
+      'Only to REVISE an existing plan: its id (from push_meal_plan or list_meal_plans). Omit to create a new plan.',
+    ),
+  name: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Optional plan name, e.g. "Taco Week". Unnamed plans show as "Meal Plan {id}".'),
+  meals: tolerantArray(wireMeal).min(1).describe('1 or more meals — a plan can be any size'),
 };
 
 /** A minimal valid payload, echoed with every validation error — models imitate examples better than schemas. */
 export const PUSH_EXAMPLE =
-  '{"weekStart":"2026-07-06","meals":[{"dayOfWeek":0,"recipeId":12},{"dayOfWeek":2,"recipe":{"title":"Salmon with Zucchini","servings":4,"prepMinutes":10,"cookMinutes":20,"tags":["quick"],"stepsMarkdown":"1. Sear salmon.\\n2. Sauté zucchini.","ingredients":[{"name":"salmon fillets","quantity":1.5,"unit":"lb","section":"meat-seafood"},{"name":"zucchini","quantity":3,"unit":null,"section":"produce"},{"name":"salt","quantity":null,"unit":null,"section":"spices"}]}}]}';
+  '{"name":"Salmon Week","meals":[{"mealType":"dinner","recipeId":12},{"mealType":"dinner","recipe":{"title":"Salmon with Zucchini","servings":4,"prepMinutes":10,"cookMinutes":20,"tags":["quick"],"stepsMarkdown":"1. Sear salmon.\\n2. Sauté zucchini.","ingredients":[{"name":"salmon fillets","quantity":1.5,"unit":"lb","section":"meat-seafood"},{"name":"zucchini","quantity":3,"unit":null,"section":"produce"},{"name":"salt","quantity":null,"unit":null,"section":"spices"}]}}]}';
 
 /** "1.5", "1/2", "1 1/2", 2 → number; ""/null/undefined → null; junk survives for the strict validator to name. */
 function toNumberish(value: number | string | null | undefined): number | null | unknown {
@@ -132,9 +151,20 @@ function canonicalSection(value: string | null | undefined): unknown {
     .replace(/[\s_]+/g, '-');
 }
 
+/** "Dinner" / "SNACKS" → "dinner" / "snack"; unknown values survive for the enum error to list options. */
+function canonicalMealType(value: string | null | undefined): unknown {
+  if (typeof value !== 'string') return value;
+  const lowered = value.trim().toLowerCase();
+  return lowered === 'snacks' ? 'snack' : lowered;
+}
+
 type WireMeal = z.infer<typeof wireMeal>;
 type WireRecipe = z.infer<typeof wireRecipe>;
-type WirePushInput = { weekStart: string; meals: Array<WireMeal | WireMeal[]> };
+type WirePushInput = {
+  planId?: number | string | null | undefined;
+  name?: string | null | undefined;
+  meals: Array<WireMeal | WireMeal[]>;
+};
 
 function normalizeRecipeFields(recipe: WireRecipe): Record<string, unknown> {
   return {
@@ -144,6 +174,9 @@ function normalizeRecipeFields(recipe: WireRecipe): Record<string, unknown> {
     prepMinutes: recipe.prepMinutes != null ? toNumberish(recipe.prepMinutes) : null,
     cookMinutes: recipe.cookMinutes != null ? toNumberish(recipe.cookMinutes) : null,
     ...(recipe.tags != null ? { tags: flattenOnce(recipe.tags) } : {}),
+    ...(recipe.mealTypes != null
+      ? { mealTypes: flattenOnce(recipe.mealTypes).map((t) => canonicalMealType(t)) }
+      : {}),
     stepsMarkdown: recipe.stepsMarkdown,
     ingredients:
       recipe.ingredients != null
@@ -162,7 +195,7 @@ function normalizeRecipeFields(recipe: WireRecipe): Record<string, unknown> {
 
 /** A minimal valid recipe, echoed with create_recipe validation errors. */
 export const RECIPE_EXAMPLE =
-  '{"title":"Salmon with Zucchini","servings":4,"prepMinutes":10,"cookMinutes":20,"tags":["quick"],"stepsMarkdown":"1. Sear salmon.\\n2. Sauté zucchini.","ingredients":[{"name":"salmon fillets","quantity":1.5,"unit":"lb","section":"meat-seafood"},{"name":"zucchini","quantity":3,"unit":null,"section":"produce"}]}';
+  '{"title":"Salmon with Zucchini","servings":4,"prepMinutes":10,"cookMinutes":20,"tags":["quick"],"mealTypes":["dinner"],"stepsMarkdown":"1. Sear salmon.\\n2. Sauté zucchini.","ingredients":[{"name":"salmon fillets","quantity":1.5,"unit":"lb","section":"meat-seafood"},{"name":"zucchini","quantity":3,"unit":null,"section":"produce"}]}';
 
 /** Coerce a wire-format recipe into the strict shared schema, reporting field paths on failure. */
 export function normalizeRecipe(recipe: WireRecipe): RecipeInput {
@@ -177,11 +210,13 @@ export function normalizeRecipe(recipe: WireRecipe): RecipeInput {
 /** Coerce a wire-format payload into the strict shared schema, reporting field paths on failure. */
 export function normalizePush(input: WirePushInput): PushMealPlanInput {
   const normalized = {
-    weekStart: input.weekStart.trim(),
+    ...(input.planId != null && input.planId !== '' ? { planId: toNumberish(input.planId) } : {}),
+    ...(typeof input.name === 'string' && input.name.trim() !== ''
+      ? { name: input.name.trim() }
+      : {}),
     meals: flattenOnce(input.meals).map((meal) => ({
-      dayOfWeek: toNumberish(meal.dayOfWeek),
       ...(typeof meal.mealType === 'string' && meal.mealType.trim() !== ''
-        ? { mealType: meal.mealType.trim() }
+        ? { mealType: canonicalMealType(meal.mealType) }
         : {}),
       ...(meal.recipeId != null ? { recipeId: toNumberish(meal.recipeId) } : {}),
       ...(meal.recipe != null ? { recipe: normalizeRecipeFields(meal.recipe) } : {}),

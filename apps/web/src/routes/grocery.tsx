@@ -4,21 +4,18 @@ import {
   type StoreSection,
   sectionSchema,
 } from '@mealforge/shared/schemas';
-import { weekStartOf } from '@mealforge/shared/utils';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { EmptyState } from '../components/EmptyState';
 import { trpc } from '../lib/trpc';
-import { weekRangeLabel } from '../lib/weekLabel';
 
 export const Route = createFileRoute('/grocery')({
   component: GroceryPage,
 });
 
 function GroceryPage(): React.ReactElement {
-  const weekStart = weekStartOf();
-  const { data: plan, isLoading: planLoading } = trpc.plans.current.useQuery({ from: weekStart });
+  const { data: plan, isLoading: planLoading } = trpc.plans.active.useQuery();
   const planId = plan?.planId;
   const utils = trpc.useUtils();
   const { data: items, isLoading: itemsLoading } = trpc.grocery.itemsForPlan.useQuery(
@@ -59,7 +56,7 @@ function GroceryPage(): React.ReactElement {
         <EmptyState
           glyph="an empty basket"
           title="No list yet"
-          hint="The grocery list builds itself from this week's meal plan. Plan the week in chat first."
+          hint="The grocery list builds itself from the active meal plan. Set a plan active (or push one from chat) and shop from here."
         />
       </div>
     );
@@ -76,8 +73,8 @@ function GroceryPage(): React.ReactElement {
     <div className="flex flex-col gap-4 p-4">
       <header className="flex items-baseline justify-between pt-2">
         <h1 className="font-display text-2xl font-bold">Grocery</h1>
-        <p className="font-quant text-xs text-ink-soft">
-          {weekRangeLabel(plan.weekStart)} · {done.length}/{items.length} in the cart
+        <p className="min-w-0 truncate font-quant text-xs text-ink-soft">
+          {plan.displayName} · {done.length}/{items.length} in the cart
         </p>
       </header>
 

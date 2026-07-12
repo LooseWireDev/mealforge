@@ -34,12 +34,11 @@ async function rpc(app: Hono, method: string, params?: unknown): Promise<unknown
   return parsed.result;
 }
 
-function sampleWeek(weekStart: string): unknown {
+function samplePlan(name?: string): unknown {
   return {
-    weekStart,
+    ...(name !== undefined ? { name } : {}),
     meals: [
       {
-        dayOfWeek: 0,
         mealType: 'dinner',
         recipe: {
           title: 'Cast Iron Roast Chicken',
@@ -57,19 +56,18 @@ function sampleWeek(weekStart: string): unknown {
         },
       },
       {
-        dayOfWeek: 2,
-        mealType: 'dinner',
+        mealType: 'breakfast',
         recipe: {
-          title: 'Salmon with Zucchini',
-          description: 'Pan-seared salmon.',
+          title: 'Zucchini Frittata',
+          description: 'Eggs for a slow morning.',
           servings: 4,
           prepMinutes: 10,
           cookMinutes: 20,
-          tags: ['fish', 'quick'],
-          stepsMarkdown: '1. Sear salmon.\n2. Sauté zucchini.',
+          tags: ['eggs', 'quick'],
+          stepsMarkdown: '1. Whisk eggs.\n2. Bake in the skillet.',
           ingredients: [
-            { name: 'salmon fillets', quantity: 1.5, unit: 'lb', section: 'meat-seafood' },
-            { name: 'zucchini', quantity: 3, unit: null, section: 'produce' },
+            { name: 'eggs', quantity: 8, unit: null, section: 'dairy-eggs' },
+            { name: 'zucchini', quantity: 2, unit: null, section: 'produce' },
             { name: 'salt', quantity: null, unit: null, section: 'spices' },
           ],
         },
@@ -87,6 +85,21 @@ async function callTool(app: Hono, name: string, args: unknown): Promise<ToolCal
   return (await rpc(app, 'tools/call', { name, arguments: args })) as ToolCallResult;
 }
 
+function payloadOf<T>(result: ToolCallResult): T {
+  return JSON.parse(result.content[0]?.text ?? 'null') as T;
+}
+
+interface PlanPayload {
+  planId: number;
+  name: string | null;
+  displayName: string;
+  status: string;
+  created: boolean;
+  meals: Array<{ mealType: string; title: string; recipeId: number }>;
+  groceryItemCount: number;
+  appUrl: string;
+}
+
 describe('MCP endpoint', () => {
   let db: Db;
   let app: Hono;
@@ -102,67 +115,129 @@ describe('MCP endpoint', () => {
     });
   });
 
-  it('lists the seven mealforge tools', async () => {
+  it('lists the ten mealforge tools', async () => {
     const result = (await rpc(app, 'tools/list')) as { tools: Array<{ name: string }> };
     expect(result.tools.map((t) => t.name).sort()).toEqual([
+      'activate_meal_plan',
+      'complete_meal_plan',
       'create_recipe',
-      'get_meal_plan_for_week',
-      'get_recent_meal_plans',
+      'get_active_meal_plan',
+      'get_meal_plan',
       'get_recipe',
       'list_favorites',
+      'list_meal_plans',
       'push_meal_plan',
       'search_recipes',
     ]);
   });
 
-  it('push_meal_plan stores the week and returns a summary with the app url', async () => {
-    const result = await callTool(app, 'push_meal_plan', sampleWeek('2026-07-06'));
+  it('push_meal_plan stores the plan and returns a summary with the app url', async () => {
+    const result = await callTool(app, 'push_meal_plan', samplePlan('Test Week'));
     expect(result.isError).toBeFalsy();
-    const payload = JSON.parse(result.content[0]?.text ?? '{}') as {
-      created: boolean;
-      meals: Array<{ title: string }>;
-      groceryItemCount: number;
-      appUrl: string;
-    };
+    const payload = payloadOf<PlanPayload>(result);
     expect(payload.created).toBe(true);
-    expect(payload.meals.map((m) => m.title)).toEqual([
-      'Cast Iron Roast Chicken',
-      'Salmon with Zucchini',
+    // an empty kitchen's first plan goes straight to active
+    expect(payload.status).toBe('active');
+    expect(payload.displayName).toBe('Test Week');
+    expect(payload.meals.map((m) => `${m.mealType}:${m.title}`)).toEqual([
+      'dinner:Cast Iron Roast Chicken',
+      'breakfast:Zucchini Frittata',
     ]);
-    // carrots, zucchini, chicken, salmon, salt (deduped) = 5
+    // chicken, carrots, salt (deduped), eggs, zucchini = 5
     expect(payload.groceryItemCount).toBe(5);
     expect(payload.appUrl).toContain('http');
   });
 
+  it('second push lands as upcoming; lifecycle tools promote and complete', async () => {
+    const first = payloadOf<PlanPayload>(await callTool(app, 'push_meal_plan', samplePlan()));
+    const second = payloadOf<PlanPayload>(
+      await callTool(app, 'push_meal_plan', {
+        meals: [{ mealType: 'dinner', recipeId: first.meals[0]?.recipeId }],
+      }),
+    );
+    expect(second.status).toBe('upcoming');
+
+    // activating over an active plan fails with a pointer to the blocker
+    const blocked = await callTool(app, 'activate_meal_plan', { planId: second.planId });
+    expect(blocked.isError).toBe(true);
+    expect(blocked.content[0]?.text).toContain('already active');
+
+    // complete the active plan (no planId = active one), then promote
+    const completed = payloadOf<PlanPayload>(await callTool(app, 'complete_meal_plan', {}));
+    expect(completed.planId).toBe(first.planId);
+    expect(completed.status).toBe('completed');
+
+    const promoted = payloadOf<PlanPayload>(
+      await callTool(app, 'activate_meal_plan', { planId: String(second.planId) }),
+    );
+    expect(promoted.status).toBe('active');
+
+    const active = payloadOf<PlanPayload>(await callTool(app, 'get_active_meal_plan', {}));
+    expect(active.planId).toBe(second.planId);
+  });
+
+  it('push with planId revises a plan in place', async () => {
+    const first = payloadOf<PlanPayload>(
+      await callTool(app, 'push_meal_plan', samplePlan('Original')),
+    );
+    const revised = payloadOf<PlanPayload>(
+      await callTool(app, 'push_meal_plan', {
+        planId: String(first.planId),
+        meals: [{ mealType: 'dinner', recipeId: first.meals[0]?.recipeId }],
+      }),
+    );
+    expect(revised.created).toBe(false);
+    expect(revised.planId).toBe(first.planId);
+    expect(revised.name).toBe('Original');
+    expect(revised.meals).toHaveLength(1);
+  });
+
   it('recall tools see pushed data', async () => {
-    await callTool(app, 'push_meal_plan', sampleWeek('2026-07-06'));
+    await callTool(app, 'push_meal_plan', samplePlan('Recall Week'));
 
-    const recent = await callTool(app, 'get_recent_meal_plans', { limit: 4 });
-    const plans = JSON.parse(recent.content[0]?.text ?? '[]') as Array<{ weekStart: string }>;
-    expect(plans[0]?.weekStart).toBe('2026-07-06');
+    const listed = await callTool(app, 'list_meal_plans', { limit: 4 });
+    const plans = payloadOf<Array<{ planId: number; displayName: string; status: string }>>(listed);
+    expect(plans[0]?.displayName).toBe('Recall Week');
+    expect(plans[0]?.status).toBe('active');
 
-    const search = await callTool(app, 'search_recipes', { query: 'salmon' });
-    const found = JSON.parse(search.content[0]?.text ?? '[]') as Array<{ id: number }>;
+    const byId = await callTool(app, 'get_meal_plan', { planId: plans[0]?.planId });
+    expect(payloadOf<PlanPayload>(byId).displayName).toBe('Recall Week');
+
+    const search = await callTool(app, 'search_recipes', { query: 'frittata' });
+    const found = payloadOf<Array<{ id: number }>>(search);
     expect(found).toHaveLength(1);
 
     const detail = await callTool(app, 'get_recipe', { recipeId: found[0]?.id as number });
-    const full = JSON.parse(detail.content[0]?.text ?? '{}') as {
+    const full = payloadOf<{
       stepsMarkdown: string;
-      usedInWeeks: string[];
-    };
-    expect(full.stepsMarkdown).toContain('Sear salmon');
-    expect(full.usedInWeeks).toEqual(['2026-07-06']);
+      mealTypes: string[];
+      usedInPlans: Array<{ displayName: string }>;
+    }>(detail);
+    expect(full.stepsMarkdown).toContain('Whisk eggs');
+    expect(full.mealTypes).toEqual(['breakfast']);
+    expect(full.usedInPlans.map((u) => u.displayName)).toEqual(['Recall Week']);
+  });
+
+  it('list_meal_plans filters by status', async () => {
+    const first = payloadOf<PlanPayload>(await callTool(app, 'push_meal_plan', samplePlan()));
+    await callTool(app, 'push_meal_plan', {
+      meals: [{ mealType: 'dinner', recipeId: first.meals[0]?.recipeId }],
+    });
+
+    const upcoming = payloadOf<Array<{ status: string }>>(
+      await callTool(app, 'list_meal_plans', { status: 'upcoming' }),
+    );
+    expect(upcoming).toHaveLength(1);
+    expect(upcoming[0]?.status).toBe('upcoming');
   });
 
   it('accepts numbers sent as strings and fraction quantities (small-model wire format)', async () => {
     // regression: MiniMax-M3 sends every number inside the nested recipe as a
     // string, which a strict published schema rejects client-side in LibreChat
     const result = await callTool(app, 'push_meal_plan', {
-      weekStart: '2026-07-13',
       meals: [
         {
-          dayOfWeek: '0',
-          mealType: 'dinner',
+          mealType: 'Dinner',
           recipe: {
             title: 'Shrimp Scampi',
             description: 'Garlic butter shrimp.',
@@ -181,21 +256,18 @@ describe('MCP endpoint', () => {
       ],
     });
     expect(result.isError).toBeFalsy();
-    const payload = JSON.parse(result.content[0]?.text ?? '{}') as {
-      meals: Array<{ title: string }>;
-      groceryItemCount: number;
-    };
+    const payload = payloadOf<PlanPayload>(result);
     expect(payload.meals[0]?.title).toBe('Shrimp Scampi');
+    // wrong-case meal types are canonicalized
+    expect(payload.meals[0]?.mealType).toBe('dinner');
     expect(payload.groceryItemCount).toBe(3);
   });
 
   it('tolerates double-wrapped arrays (small-model wire format)', async () => {
     // regression: MiniMax-M3 also sends tags/ingredients as nested arrays
     const result = await callTool(app, 'push_meal_plan', {
-      weekStart: '2026-07-13',
       meals: [
         {
-          dayOfWeek: 0,
           recipe: {
             title: 'Nested Arrays',
             servings: 4,
@@ -212,8 +284,7 @@ describe('MCP endpoint', () => {
       ],
     });
     expect(result.isError).toBeFalsy();
-    const payload = JSON.parse(result.content[0]?.text ?? '{}') as { groceryItemCount: number };
-    expect(payload.groceryItemCount).toBe(2);
+    expect(payloadOf<PlanPayload>(result).groceryItemCount).toBe(2);
   });
 
   it('create_recipe returns a recipeId usable by push_meal_plan', async () => {
@@ -224,30 +295,26 @@ describe('MCP endpoint', () => {
       prepMinutes: '15',
       cookMinutes: '480',
       tags: ['slow-cooker'],
+      mealTypes: ['Dinner', 'lunch'],
       stepsMarkdown: '1. Slow cook.\n2. Broil.',
       ingredients: [{ name: 'pork shoulder', quantity: '3', unit: 'lb', section: 'meat-seafood' }],
     });
     expect(created.isError).toBeFalsy();
-    const { recipeId } = JSON.parse(created.content[0]?.text ?? '{}') as { recipeId: number };
+    const { recipeId } = payloadOf<{ recipeId: number }>(created);
     expect(recipeId).toBeGreaterThan(0);
 
     const pushed = await callTool(app, 'push_meal_plan', {
-      weekStart: '2026-07-20',
-      meals: [{ dayOfWeek: 4, mealType: 'dinner', recipeId }],
+      name: 'Carnitas Night',
+      meals: [{ mealType: 'dinner', recipeId }],
     });
     expect(pushed.isError).toBeFalsy();
-    const payload = JSON.parse(pushed.content[0]?.text ?? '{}') as {
-      meals: Array<{ title: string }>;
-    };
-    expect(payload.meals[0]?.title).toBe('Standalone Carnitas');
+    expect(payloadOf<PlanPayload>(pushed).meals[0]?.title).toBe('Standalone Carnitas');
   });
 
   it('canonicalizes section names and ignores unknown extra keys', async () => {
     const result = await callTool(app, 'push_meal_plan', {
-      weekStart: '2026-07-13',
       meals: [
         {
-          dayOfWeek: 0,
           notes: 'extra key models like to add',
           recipe: {
             title: 'Section Variants',
@@ -263,16 +330,13 @@ describe('MCP endpoint', () => {
       ],
     });
     expect(result.isError).toBeFalsy();
-    const payload = JSON.parse(result.content[0]?.text ?? '{}') as { groceryItemCount: number };
-    expect(payload.groceryItemCount).toBe(2);
+    expect(payloadOf<PlanPayload>(result).groceryItemCount).toBe(2);
   });
 
   it('missing required recipe fields produce a path error with a valid example', async () => {
     const result = await callTool(app, 'push_meal_plan', {
-      weekStart: '2026-07-13',
       meals: [
         {
-          dayOfWeek: 0,
           recipe: {
             title: 'No Steps',
             ingredients: [{ name: 'x', quantity: 1, unit: 'lb', section: 'pantry' }],
@@ -288,10 +352,8 @@ describe('MCP endpoint', () => {
 
   it('reports the exact field path when a value cannot be coerced', async () => {
     const result = await callTool(app, 'push_meal_plan', {
-      weekStart: '2026-07-13',
       meals: [
         {
-          dayOfWeek: 0,
           recipe: {
             title: 'Bad Quantity',
             stepsMarkdown: '1. x',
@@ -306,12 +368,34 @@ describe('MCP endpoint', () => {
     expect(result.content[0]?.text).toContain('meals.0.recipe.ingredients.0.quantity');
   });
 
+  it('rejects an unknown meal type with the valid options', async () => {
+    const result = await callTool(app, 'push_meal_plan', {
+      meals: [
+        {
+          mealType: 'brunch',
+          recipe: {
+            title: 'Brunch Thing',
+            stepsMarkdown: '1. x',
+            ingredients: [{ name: 'eggs', quantity: 6, unit: null, section: 'dairy-eggs' }],
+          },
+        },
+      ],
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain('meals.0.mealType');
+  });
+
   it('push_meal_plan returns a friendly error for an invalid meal', async () => {
     const result = await callTool(app, 'push_meal_plan', {
-      weekStart: '2026-07-06',
-      meals: [{ dayOfWeek: 0, mealType: 'dinner' }],
+      meals: [{ mealType: 'dinner' }],
     });
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toMatch(/exactly one/);
+  });
+
+  it('complete_meal_plan with nothing active reports it', async () => {
+    const result = await callTool(app, 'complete_meal_plan', {});
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain('No active meal plan');
   });
 });

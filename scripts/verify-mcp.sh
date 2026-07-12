@@ -15,23 +15,26 @@ echo "$INIT" | grep -q '"serverInfo"' && echo "    ok: $(echo "$INIT" | grep -o 
 
 echo "==> tools/list"
 TOOLS=$(curl -sf -X POST "$MCP" "${HDRS[@]}" -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | json_of)
-for tool in push_meal_plan create_recipe get_recent_meal_plans get_meal_plan_for_week list_favorites search_recipes get_recipe; do
+for tool in push_meal_plan create_recipe list_meal_plans get_meal_plan get_active_meal_plan activate_meal_plan complete_meal_plan list_favorites search_recipes get_recipe; do
   echo "$TOOLS" | grep -q "\"$tool\"" || { echo "MISSING TOOL: $tool"; exit 1; }
 done
-echo "    ok: all 7 tools present"
+echo "    ok: all 10 tools present"
 
-# next Monday, so a test push never collides with the real current week
-WEEK=$(date -d 'next monday' +%F 2>/dev/null || date -v +Mon +%F)
-
-echo "==> push_meal_plan ($WEEK)"
-PUSH=$(curl -sf -X POST "$MCP" "${HDRS[@]}" -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"push_meal_plan","arguments":{"weekStart":"'"$WEEK"'","meals":[{"dayOfWeek":0,"mealType":"dinner","recipe":{"title":"Verify Script Test Meal","description":"Pushed by verify-mcp.sh — safe to ignore.","servings":2,"prepMinutes":5,"cookMinutes":10,"tags":["test"],"stepsMarkdown":"1. This is a smoke test.","ingredients":[{"name":"test ingredient","quantity":1,"unit":"cup","section":"pantry"}]}}]}}}' | json_of)
-echo "$PUSH" | grep -q planId || { echo "PUSH FAILED: $PUSH"; exit 1; }
-echo "    ok: plan pushed"
+echo "==> push_meal_plan"
+PUSH=$(curl -sf -X POST "$MCP" "${HDRS[@]}" -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"push_meal_plan","arguments":{"name":"Verify Script Test Plan","meals":[{"mealType":"dinner","recipe":{"title":"Verify Script Test Meal","description":"Pushed by verify-mcp.sh — safe to ignore.","servings":2,"prepMinutes":5,"cookMinutes":10,"tags":["test"],"stepsMarkdown":"1. This is a smoke test.","ingredients":[{"name":"test ingredient","quantity":1,"unit":"cup","section":"pantry"}]}}]}}}' | json_of)
+PLAN_ID=$(echo "$PUSH" | grep -o 'planId[\\": ]*[0-9]*' | head -1 | grep -o '[0-9]*$')
+[ -n "$PLAN_ID" ] || { echo "PUSH FAILED: $PUSH"; exit 1; }
+echo "    ok: plan $PLAN_ID pushed"
 
 echo "==> read back via tRPC"
-ENC_INPUT=$(printf '{"weekStart":"%s"}' "$WEEK" | sed 's/{/%7B/g;s/}/%7D/g;s/"/%22/g;s/:/%3A/g;s/,/%2C/g')
-curl -sf "$BASE/trpc/plans.byWeek?input=$ENC_INPUT" | grep -q 'Verify Script Test Meal' && echo "    ok: plan visible in app API"
+ENC_INPUT=$(printf '{"planId":%s}' "$PLAN_ID" | sed 's/{/%7B/g;s/}/%7D/g;s/"/%22/g;s/:/%3A/g;s/,/%2C/g')
+curl -sf "$BASE/trpc/plans.byId?input=$ENC_INPUT" | grep -q 'Verify Script Test Meal' && echo "    ok: plan visible in app API"
+
+echo "==> complete_meal_plan (tidy up)"
+DONE=$(curl -sf -X POST "$MCP" "${HDRS[@]}" -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"complete_meal_plan","arguments":{"planId":'"$PLAN_ID"'}}}' | json_of)
+echo "$DONE" | grep -q 'completed' || { echo "COMPLETE FAILED: $DONE"; exit 1; }
+echo "    ok: test plan completed"
 
 echo
 echo "All checks passed against $BASE"
-echo "NOTE: a test plan now exists for week $WEEK — re-push that week with a real plan (or ignore it)."
+echo "NOTE: a completed test plan (\"Verify Script Test Plan\") now sits in your history — safe to ignore."
