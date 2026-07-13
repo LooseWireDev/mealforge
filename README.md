@@ -7,7 +7,7 @@
 
 Meal-planning apps limit you to their recipe catalog. mealforge has **no catalog**: every recipe is generated in conversation, tailored to your household, constraints, and whatever sounds good right now. The app is the structured, shoppable, cookable home for what you and the model decide together.
 
-![Meal plan view](docs/screenshots/week.png)
+![Meal plan view](docs/screenshots/plans.png)
 
 | Grocery list, grouped by store section | Recipe with cook mode |
 |:---:|:---:|

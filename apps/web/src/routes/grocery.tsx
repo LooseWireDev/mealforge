@@ -71,8 +71,8 @@ function GroceryPage(): React.ReactElement {
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <header className="flex items-baseline justify-between pt-2">
-        <h1 className="font-display text-2xl font-bold">Grocery</h1>
+      <header className="flex items-baseline justify-between gap-3 pt-2">
+        <h1 className="shrink-0 font-display text-2xl font-bold">Grocery</h1>
         <p className="min-w-0 truncate font-quant text-xs text-ink-soft">
           {plan.displayName} · {done.length}/{items.length} in the cart
         </p>
