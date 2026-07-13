@@ -11,7 +11,13 @@ export interface PlanData {
   isFavorite: boolean;
   createdAt: Date | string;
   completedAt: Date | string | null;
-  meals: Array<{ mealType: MealType; recipeId: number; title: string }>;
+  meals: Array<{
+    mealId: number;
+    mealType: MealType;
+    recipeId: number;
+    title: string;
+    cookedAt: Date | string | null;
+  }>;
 }
 
 /** "Jul 8" */

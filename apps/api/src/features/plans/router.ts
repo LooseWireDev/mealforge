@@ -9,6 +9,7 @@ import {
   getPlan,
   listPlans,
   renamePlan,
+  setMealCooked,
   togglePlanFavorite,
 } from './service';
 
@@ -41,4 +42,7 @@ export const plansRouter = router({
   toggleFavorite: publicProcedure
     .input(planIdInput)
     .mutation(({ ctx, input }) => togglePlanFavorite(ctx.db, input.planId)),
+  setMealCooked: publicProcedure
+    .input(z.object({ mealId: z.number().int().positive(), cooked: z.boolean() }))
+    .mutation(({ ctx, input }) => setMealCooked(ctx.db, input.mealId, input.cooked)),
 });

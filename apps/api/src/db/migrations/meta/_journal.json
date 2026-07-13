@@ -15,6 +15,13 @@
       "when": 1783808888213,
       "tag": "0001_narrow_photon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783900934023,
+      "tag": "0002_majestic_smasher",
+      "breakpoints": true
     }
   ]
 }

@@ -28,7 +28,7 @@ Lifecycle moves are user commands, not your judgment calls: `complete_meal_plan`
 
 ### 1. Gather context before proposing anything
 
-- `get_active_meal_plan` and `list_meal_plans` (limit 6) — see what's cooking now and what was cooked recently; don't repeat recent meals unless asked.
+- `get_active_meal_plan` and `list_meal_plans` (limit 6) — see what's cooking now and what was cooked recently; don't repeat recent meals unless asked. Each meal's `cookedAt` (null = not cooked yet) is the household's check-off, so you can answer "what's left to cook this week?".
 - If the user wants something they've had before ("one of our favorites", "that carnitas"), find it with `list_favorites` or `search_recipes`, confirm with `get_recipe`, and remember its recipeId — reuse the id at push time instead of recreating the recipe.
 - For "one of our favorite plans", use `list_meal_plans` with `favoritesOnly: true` and rebuild from its recipeIds.
 
@@ -70,4 +70,4 @@ The error names the exact fields and shows a valid example. Fix only those field
 
 ### 6. Revising a pushed plan
 
-Adjust in chat, then — again only when told — re-push with the **same `planId`**: `create_recipe` for any newly added meals, then `push_meal_plan` with `planId` and the full plan's ids (unchanged meals keep their existing recipeIds). The app replaces the meals and regenerates the grocery list; checked-off items that didn't change stay checked, so mid-plan re-pushes are safe. Never omit `planId` when revising — that would create a duplicate plan.
+Adjust in chat, then — again only when told — re-push with the **same `planId`**: `create_recipe` for any newly added meals, then `push_meal_plan` with `planId` and the full plan's ids (unchanged meals keep their existing recipeIds). The app replaces the meals and regenerates the grocery list; checked-off grocery items that didn't change stay checked, and meals that survive the revision (same recipeId and mealType) keep their cooked check-offs, so mid-plan re-pushes are safe. Never omit `planId` when revising — that would create a duplicate plan.

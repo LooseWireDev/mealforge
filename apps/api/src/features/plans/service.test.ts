@@ -12,6 +12,7 @@ import {
   listPlans,
   pushMealPlan,
   renamePlan,
+  setMealCooked,
   togglePlanFavorite,
 } from './service';
 
@@ -278,6 +279,98 @@ describe('plan lifecycle', () => {
   it('unknown plan ids fail with a friendly error', () => {
     expect(() => activatePlan(db, 42)).toThrow(/does not exist/);
     expect(() => completePlan(db, 42)).toThrow(/does not exist/);
+  });
+});
+
+describe('cooking meals off', () => {
+  let db: Db;
+  beforeEach(() => {
+    db = testDb();
+  });
+
+  it('meals start uncooked; checking off sets cookedAt and is reversible', () => {
+    const p = pushMealPlan(db, plan([dinner('Roast Chicken'), dinner('Tacos')]));
+    expect(p.meals.every((m) => m.cookedAt === null)).toBe(true);
+
+    const mealId = p.meals[0]?.mealId as number;
+    const checked = setMealCooked(db, mealId, true);
+    expect(checked.meals.find((m) => m.mealId === mealId)?.cookedAt).toBeInstanceOf(Date);
+    expect(checked.meals.filter((m) => m.cookedAt !== null)).toHaveLength(1);
+
+    const unchecked = setMealCooked(db, mealId, false);
+    expect(unchecked.meals.every((m) => m.cookedAt === null)).toBe(true);
+  });
+
+  it('unknown meal ids fail with a friendly error', () => {
+    expect(() => setMealCooked(db, 999, true)).toThrow(/does not exist/);
+  });
+
+  it('re-push keeps the cooked check-off for meals with the same recipe and type', () => {
+    const first = pushMealPlan(db, plan([dinner('Keeper'), dinner('Swapped Out')]));
+    const keeperRecipeId = first.meals[0]?.recipeId as number;
+    setMealCooked(db, first.meals[0]?.mealId as number, true);
+
+    const revised = pushMealPlan(
+      db,
+      plan([{ mealType: 'dinner', recipeId: keeperRecipeId }, dinner('New Meal')], {
+        planId: first.planId,
+      }),
+    );
+    expect(revised.meals.find((m) => m.recipeId === keeperRecipeId)?.cookedAt).not.toBeNull();
+    expect(revised.meals.find((m) => m.title === 'New Meal')?.cookedAt).toBeNull();
+  });
+
+  it('re-push does not carry a check-off across a meal type change', () => {
+    const first = pushMealPlan(db, plan([dinner('Frittata')]));
+    const recipeId = first.meals[0]?.recipeId as number;
+    setMealCooked(db, first.meals[0]?.mealId as number, true);
+
+    const revised = pushMealPlan(
+      db,
+      plan([{ mealType: 'breakfast', recipeId }], { planId: first.planId }),
+    );
+    expect(revised.meals[0]?.cookedAt).toBeNull();
+  });
+
+  it('re-push shrinking duplicate meals keeps the cooked one', () => {
+    const first = pushMealPlan(db, plan([dinner('Pasta')]));
+    const pastaId = first.meals[0]?.recipeId as number;
+    const twice = pushMealPlan(
+      db,
+      plan(
+        [
+          { mealType: 'dinner', recipeId: pastaId },
+          { mealType: 'dinner', recipeId: pastaId },
+        ],
+        { planId: first.planId },
+      ),
+    );
+    // cook the second copy, then shrink back to one pasta dinner
+    setMealCooked(db, twice.meals[1]?.mealId as number, true);
+
+    const shrunk = pushMealPlan(
+      db,
+      plan([{ mealType: 'dinner', recipeId: pastaId }], { planId: first.planId }),
+    );
+    expect(shrunk.meals[0]?.cookedAt).not.toBeNull();
+  });
+
+  it('reactivating a completed plan starts a fresh run with nothing cooked', () => {
+    const p = pushMealPlan(db, plan([dinner('A'), dinner('B')]));
+    setMealCooked(db, p.meals[0]?.mealId as number, true);
+    setMealCooked(db, p.meals[1]?.mealId as number, true);
+    completePlan(db, p.planId);
+
+    const reactivated = activatePlan(db, p.planId);
+    expect(reactivated.meals.every((m) => m.cookedAt === null)).toBe(true);
+  });
+
+  it('completing a plan keeps its cooked marks as history', () => {
+    const p = pushMealPlan(db, plan([dinner('A'), dinner('B')]));
+    setMealCooked(db, p.meals[0]?.mealId as number, true);
+
+    const completed = completePlan(db, p.planId);
+    expect(completed.meals.filter((m) => m.cookedAt !== null)).toHaveLength(1);
   });
 });
 

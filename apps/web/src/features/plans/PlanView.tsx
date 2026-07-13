@@ -9,11 +9,17 @@ interface PlanViewProps {
 }
 
 function statusLine(plan: PlanData): string {
-  const meals = `${plan.meals.length} ${plan.meals.length === 1 ? 'meal' : 'meals'}`;
-  if (plan.status === 'completed' && plan.completedAt !== null) {
-    return `${meals} · completed ${formatPlanDate(plan.completedAt)}`;
+  const cookedCount = plan.meals.filter((meal) => meal.cookedAt !== null).length;
+  const parts = [`${plan.meals.length} ${plan.meals.length === 1 ? 'meal' : 'meals'}`];
+  if (cookedCount > 0) {
+    parts.push(`${cookedCount} cooked`);
   }
-  return `${meals} · ${plan.status}`;
+  if (plan.status === 'completed' && plan.completedAt !== null) {
+    parts.push(`completed ${formatPlanDate(plan.completedAt)}`);
+  } else {
+    parts.push(plan.status);
+  }
+  return parts.join(' · ');
 }
 
 export function PlanView({ plan }: PlanViewProps): React.ReactElement {
@@ -47,6 +53,28 @@ export function PlanView({ plan }: PlanViewProps): React.ReactElement {
   const activate = trpc.plans.activate.useMutation({
     onSuccess: () => setHint(null),
     onError: (error) => setHint(error.message),
+    onSettled: invalidate,
+  });
+  const setCooked = trpc.plans.setMealCooked.useMutation({
+    // optimistic: flip immediately, like the grocery list — the plan lives in
+    // both the `active` and `byId` caches, so patch whichever holds it
+    onMutate: async ({ mealId, cooked }) => {
+      await Promise.all([
+        utils.plans.active.cancel(),
+        utils.plans.byId.cancel({ planId: plan.planId }),
+      ]);
+      const cookedAt = cooked ? new Date().toISOString() : null;
+      utils.plans.active.setData(undefined, (old) =>
+        old && old.planId === plan.planId
+          ? { ...old, meals: old.meals.map((m) => (m.mealId === mealId ? { ...m, cookedAt } : m)) }
+          : old,
+      );
+      utils.plans.byId.setData({ planId: plan.planId }, (old) =>
+        old
+          ? { ...old, meals: old.meals.map((m) => (m.mealId === mealId ? { ...m, cookedAt } : m)) }
+          : old,
+      );
+    },
     onSettled: invalidate,
   });
 
@@ -154,24 +182,52 @@ export function PlanView({ plan }: PlanViewProps): React.ReactElement {
             {MEAL_TYPE_LABELS[group.type]}
           </h2>
           <ul className="flex flex-col gap-2.5">
-            {group.meals.map((meal, i) => {
+            {group.meals.map((meal) => {
               const recipe = recipes?.find((r) => r.id === meal.recipeId);
+              const cooked = meal.cookedAt !== null;
               return (
-                // biome-ignore lint/suspicious/noArrayIndexKey: the same recipe can appear twice in a group; order only changes on re-push, which refetches
-                <li key={`${meal.recipeId}-${i}`}>
-                  <RecipeCard
-                    recipe={
-                      recipe ?? {
-                        id: meal.recipeId,
-                        title: meal.title,
-                        description: '',
-                        tags: [],
-                        prepMinutes: null,
-                        cookMinutes: null,
-                        isFavorite: false,
+                <li key={meal.mealId} className="flex items-center gap-1">
+                  {/* nothing has been cooked from a queued plan, so upcoming
+                      plans don't get check-offs */}
+                  {plan.status !== 'upcoming' && (
+                    <button
+                      type="button"
+                      onClick={() => setCooked.mutate({ mealId: meal.mealId, cooked: !cooked })}
+                      aria-pressed={cooked}
+                      aria-label={
+                        cooked ? `Mark ${meal.title} as not cooked` : `Mark ${meal.title} as cooked`
                       }
-                    }
-                  />
+                      className="-ml-2 flex size-10 shrink-0 items-center justify-center"
+                    >
+                      <span
+                        aria-hidden
+                        className={`flex size-5.5 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors ${
+                          cooked
+                            ? 'border-leaf bg-leaf text-paper'
+                            : 'border-check text-transparent'
+                        }`}
+                      >
+                        ✓
+                      </span>
+                    </button>
+                  )}
+                  <div
+                    className={`min-w-0 flex-1 transition-opacity ${cooked ? 'opacity-55' : ''}`}
+                  >
+                    <RecipeCard
+                      recipe={
+                        recipe ?? {
+                          id: meal.recipeId,
+                          title: meal.title,
+                          description: '',
+                          tags: [],
+                          prepMinutes: null,
+                          cookMinutes: null,
+                          isFavorite: false,
+                        }
+                      }
+                    />
+                  </div>
                 </li>
               );
             })}

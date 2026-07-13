@@ -63,7 +63,7 @@ export function createMcpServer(db: Db): McpServer {
         'RECOMMENDED FLOW: first save each new recipe with create_recipe, then call this tool with small meals entries that reference recipeId only. ' +
         'Inline "recipe" objects are also accepted for each meal, but keep those payloads small. ' +
         "The new plan becomes the household's ACTIVE plan if none is active, otherwise it lands in UPCOMING (promote it with activate_meal_plan when asked). " +
-        "To REVISE an existing plan, pass its planId — that replaces the plan's meals and regenerates the grocery list; unchanged items keep their checked-off state. " +
+        "To REVISE an existing plan, pass its planId — that replaces the plan's meals and regenerates the grocery list; unchanged grocery items keep their checked-off state and unchanged meals (same recipeId and mealType) keep their cooked check-offs. " +
         "The grocery list is derived automatically from the recipes' structured ingredients, so ingredient quantities, units, and store sections must be accurate. " +
         'Returns the plan summary (including planId and status) and the app URL to share with the user. ' +
         `Example arguments: ${PUSH_EXAMPLE}`,

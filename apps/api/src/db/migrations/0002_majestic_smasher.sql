@@ -1,0 +1,1 @@
+ALTER TABLE `meals` ADD `cooked_at` integer;

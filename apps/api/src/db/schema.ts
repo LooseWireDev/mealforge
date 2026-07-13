@@ -73,6 +73,8 @@ export const meals = sqliteTable('meals', {
   mealType: text('meal_type').notNull().default('dinner'),
   // display order within the plan (the UI groups by meal_type first)
   sortOrder: integer('sort_order').notNull().default(0),
+  // null = not cooked yet; set when the household checks the meal off
+  cookedAt: integer('cooked_at', { mode: 'timestamp_ms' }),
 });
 
 export const groceryItems = sqliteTable(

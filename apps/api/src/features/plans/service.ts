@@ -12,9 +12,12 @@ import { groceryItems, mealPlans, meals, recipeIngredients, recipes } from '../.
 import { aggregateIngredients } from '../grocery/aggregate';
 
 export interface PlanMeal {
+  mealId: number;
   mealType: MealType;
   recipeId: number;
   title: string;
+  // null = not cooked yet; the check-off that shows what's been made
+  cookedAt: Date | null;
 }
 
 export interface PlanSummary {
@@ -93,6 +96,18 @@ export function pushMealPlan(db: Db, input: PushMealPlanInput): PushMealPlanResu
     if (oldMealRows.length > 0) {
       tx.delete(meals).where(eq(meals.planId, plan.id)).run();
     }
+    // Meals that survive the revision (same recipe, same slot) keep their
+    // cooked check-off — mirrors how grocery items keep their checked state.
+    // Each old meal is consumed at most once so duplicates carry over 1:1.
+    const unclaimedOldMeals = [...oldMealRows];
+    const claimCookedAt = (recipeId: number, mealType: MealType): Date | null => {
+      const matches = (m: (typeof oldMealRows)[number]): boolean =>
+        m.recipeId === recipeId && m.mealType === mealType;
+      // prefer a cooked match so shrinking duplicates never drops a check-off
+      let i = unclaimedOldMeals.findIndex((m) => matches(m) && m.cookedAt !== null);
+      if (i < 0) i = unclaimedOldMeals.findIndex(matches);
+      return i >= 0 ? (unclaimedOldMeals.splice(i, 1)[0]?.cookedAt ?? null) : null;
+    };
 
     const pushedMeals: PlanMeal[] = [];
     input.meals.forEach((meal, i) => {
@@ -140,10 +155,19 @@ export function pushMealPlan(db: Db, input: PushMealPlanInput): PushMealPlanResu
       } else {
         throw new Error('unreachable');
       }
-      tx.insert(meals)
-        .values({ planId: plan.id, recipeId, mealType: meal.mealType, sortOrder: i })
-        .run();
-      pushedMeals.push({ mealType: meal.mealType, recipeId, title });
+      const cookedAt = claimCookedAt(recipeId, meal.mealType);
+      const insertedMeal = tx
+        .insert(meals)
+        .values({ planId: plan.id, recipeId, mealType: meal.mealType, sortOrder: i, cookedAt })
+        .returning()
+        .get();
+      pushedMeals.push({
+        mealId: insertedMeal.id,
+        mealType: meal.mealType,
+        recipeId,
+        title,
+        cookedAt,
+      });
     });
 
     // Planning a recipe as a meal type tags the recipe with it, so "one of
@@ -319,6 +343,11 @@ export function activatePlan(db: Db, planId: number): PlanSummary {
         `"${planDisplayName(active.name, active.id)}" is already active. Complete it before activating another plan.`,
       );
     }
+    // "Cook it again" means a fresh run: a reactivated completed plan starts
+    // with every meal unchecked.
+    if (plan.status === 'completed') {
+      tx.update(meals).set({ cookedAt: null }).where(eq(meals.planId, plan.id)).run();
+    }
     const updated = tx
       .update(mealPlans)
       .set({ status: 'active', completedAt: null, updatedAt: new Date() })
@@ -357,6 +386,27 @@ export function renamePlan(db: Db, planId: number, name: string | null): PlanSum
   return toSummary(updated, mealsForPlan(db, plan.id));
 }
 
+/** Check a meal off as cooked (or uncheck it). Returns the meal's plan. */
+export function setMealCooked(db: Db, mealId: number, cooked: boolean): PlanSummary {
+  const meal = db.select().from(meals).where(eq(meals.id, mealId)).get();
+  if (!meal) {
+    throw new Error(`Meal ${mealId} does not exist.`);
+  }
+  return db.transaction((tx) => {
+    tx.update(meals)
+      .set({ cookedAt: cooked ? new Date() : null })
+      .where(eq(meals.id, meal.id))
+      .run();
+    const plan = tx
+      .update(mealPlans)
+      .set({ updatedAt: new Date() })
+      .where(eq(mealPlans.id, meal.planId))
+      .returning()
+      .get() as PlanRow;
+    return toSummary(plan, mealsForPlan(tx, plan.id));
+  });
+}
+
 export function togglePlanFavorite(db: Db, planId: number): PlanSummary {
   const plan = getPlanRow(db, planId);
   if (!plan.isFavorite && plan.name === null) {
@@ -374,9 +424,11 @@ export function togglePlanFavorite(db: Db, planId: number): PlanSummary {
 function mealsForPlan(db: Queryable, planId: number): PlanMeal[] {
   return db
     .select({
+      mealId: meals.id,
       mealType: meals.mealType,
       recipeId: meals.recipeId,
       title: recipes.title,
+      cookedAt: meals.cookedAt,
     })
     .from(meals)
     .innerJoin(recipes, eq(meals.recipeId, recipes.id))
