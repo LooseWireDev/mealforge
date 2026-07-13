@@ -16,8 +16,8 @@ Meal-planning apps limit you to their recipe catalog. mealforge has **no catalog
 ## How it works
 
 ```
-┌────────────┐  MCP (streamable http)  ┌─────────────────────────────┐
-│ your AI    │ ───────────────────────▶│ mealforge                   │
+┌────────────┐  MCP (streamable http)   ┌─────────────────────────────┐
+│ your AI    │ ───────────────────────▶ │ mealforge                   │
 │ chat       │  push_meal_plan          │  • active / upcoming /      │
 │ (LibreChat,│  activate_meal_plan      │    completed meal plans     │
 │  Claude,   │  search_recipes          │  • recipes + cook mode      │
