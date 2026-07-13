@@ -108,10 +108,23 @@ test('active plan shows meals grouped by meal type', async ({ page }) => {
   await expect(page.getByText('Meal Plan 1')).toBeVisible();
 });
 
+test('meals can be checked off as cooked, and it persists', async ({ page }) => {
+  await page.goto('/plans');
+  await page.getByLabel('Mark E2E Overnight Oats as cooked').click();
+  await expect(page.getByText('2 meals · 1 cooked · active')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText('2 meals · 1 cooked · active')).toBeVisible();
+  await expect(page.getByLabel('Mark E2E Overnight Oats as not cooked')).toBeVisible();
+
+  // uncheck to leave the plan clean for the rest of the suite
+  await page.getByLabel('Mark E2E Overnight Oats as not cooked').click();
+  await expect(page.getByText('2 meals · active')).toBeVisible();
+});
+
 test('recipe detail and cook mode', async ({ page }) => {
   await page.goto('/plans');
   await page.getByText('E2E Roast Chicken').click();
-  await page.getByText('Open recipe').click();
 
   await expect(page.getByText('whole chicken')).toBeVisible();
   await expect(page.getByText('4 lb')).toBeVisible();

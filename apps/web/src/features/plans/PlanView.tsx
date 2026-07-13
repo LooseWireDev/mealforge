@@ -186,48 +186,43 @@ export function PlanView({ plan }: PlanViewProps): React.ReactElement {
               const recipe = recipes?.find((r) => r.id === meal.recipeId);
               const cooked = meal.cookedAt !== null;
               return (
-                <li key={meal.mealId} className="flex items-center gap-1">
-                  {/* nothing has been cooked from a queued plan, so upcoming
-                      plans don't get check-offs */}
-                  {plan.status !== 'upcoming' && (
-                    <button
-                      type="button"
-                      onClick={() => setCooked.mutate({ mealId: meal.mealId, cooked: !cooked })}
-                      aria-pressed={cooked}
-                      aria-label={
-                        cooked ? `Mark ${meal.title} as not cooked` : `Mark ${meal.title} as cooked`
+                <li
+                  key={meal.mealId}
+                  className={`transition-opacity ${cooked ? 'opacity-60' : ''}`}
+                >
+                  <RecipeCard
+                    recipe={
+                      recipe ?? {
+                        id: meal.recipeId,
+                        title: meal.title,
+                        tags: [],
+                        prepMinutes: null,
+                        cookMinutes: null,
+                        isFavorite: false,
                       }
-                      className="-ml-2 flex size-10 shrink-0 items-center justify-center"
-                    >
-                      <span
-                        aria-hidden
-                        className={`flex size-5.5 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors ${
-                          cooked
-                            ? 'border-leaf bg-leaf text-paper'
-                            : 'border-check text-transparent'
-                        }`}
-                      >
-                        ✓
-                      </span>
-                    </button>
-                  )}
-                  <div
-                    className={`min-w-0 flex-1 transition-opacity ${cooked ? 'opacity-55' : ''}`}
-                  >
-                    <RecipeCard
-                      recipe={
-                        recipe ?? {
-                          id: meal.recipeId,
-                          title: meal.title,
-                          description: '',
-                          tags: [],
-                          prepMinutes: null,
-                          cookMinutes: null,
-                          isFavorite: false,
-                        }
-                      }
-                    />
-                  </div>
+                    }
+                    action={
+                      // nothing has been cooked from a queued plan, so
+                      // upcoming plans don't get the Complete button
+                      plan.status !== 'upcoming' ? (
+                        <button
+                          type="button"
+                          onClick={() => setCooked.mutate({ mealId: meal.mealId, cooked: !cooked })}
+                          aria-pressed={cooked}
+                          aria-label={
+                            cooked
+                              ? `Mark ${meal.title} as not cooked`
+                              : `Mark ${meal.title} as cooked`
+                          }
+                          className={`w-full rounded-lg py-2 text-sm font-semibold transition-colors ${
+                            cooked ? 'bg-leaf text-paper' : 'border border-line text-ink-soft'
+                          }`}
+                        >
+                          {cooked ? 'Completed ✓' : 'Complete'}
+                        </button>
+                      ) : undefined
+                    }
+                  />
                 </li>
               );
             })}
