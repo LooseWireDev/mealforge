@@ -1,18 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
   <title>mealforge</title>
-  <rect width="512" height="512" rx="112" fill="#3e6b4f"/>
-  <!-- cast iron skillet -->
-  <g transform="translate(256 268)">
-    <circle r="118" fill="#23312a"/>
-    <circle r="94" fill="#2e523c"/>
-    <rect x="104" y="-16" width="132" height="32" rx="16" fill="#23312a"/>
-    <!-- butter pat -->
-    <rect x="-34" y="-38" width="68" height="68" rx="14" fill="#f0be3a" transform="rotate(12)"/>
-  </g>
-  <!-- steam -->
-  <g stroke="#faf7f0" stroke-width="18" stroke-linecap="round" fill="none" opacity="0.9">
-    <path d="M196 132c-12-22 12-34 0-56"/>
-    <path d="M256 118c-12-22 12-34 0-56"/>
-    <path d="M316 132c-12-22 12-34 0-56"/>
-  </g>
+  <rect width="120" height="120" rx="26" fill="#23312a"/>
+  <!-- Top-down skillet: rosemary-green pan, deep-green cooking surface,
+       butter pat accent in the middle -->
+  <circle cx="52" cy="60" r="27" fill="#7fae8f"/>
+  <circle cx="52" cy="60" r="19" fill="#2e523c"/>
+  <rect x="74" y="54.5" width="32" height="11" rx="5.5" fill="#7fae8f"/>
+  <rect x="46" y="54" width="12" height="12" rx="3" fill="#f0be3a"/>
 </svg>
